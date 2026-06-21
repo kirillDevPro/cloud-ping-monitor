@@ -1,0 +1,50 @@
+# Конфигурация приложения (несекретные настройки)
+# Секретные данные (API ключи, токены) - в файле .env
+#
+# Приоритет: переменные окружения (.env) > YAML > значения по умолчанию
+
+# ============================================================================
+# ПРОВАЙДЕРЫ (Auto-Discovery)
+# ============================================================================
+# Провайдеры автоматически обнаруживаются из переменных окружения в .env!
+# Конфигурация здесь НЕ требуется.
+#
+# Паттерны переменных окружения:
+#   - Hetzner: HETZNER_{SUFFIX}_API_KEY -> alias=hetzner_{suffix}
+#   - Vultr: VULTR_{SUFFIX}_API_KEY -> alias=vultr_{suffix}
+#   - AWS: AWS_{SUFFIX}_ACCESS_KEY_ID + AWS_{SUFFIX}_SECRET_ACCESS_KEY -> alias=aws_{suffix}
+#
+# Примеры .env:
+#   HETZNER_PROD_API_KEY=xxx  -> alias=hetzner_prod, display="Hetzner (prod)"
+#   HETZNER_STAGING_API_KEY=xxx     -> alias=hetzner_staging, display="Hetzner (staging)"
+#   VULTR_MAIN_API_KEY=xxx      -> alias=vultr_main, display="Vultr" (main скрывается)
+#   AWS_PROD_ACCESS_KEY_ID=xxx  -> alias=aws_prod, display="AWS (prod)"
+#
+# Emoji автоматически: [H] для Hetzner, [V] для Vultr, [A] для AWS
+#
+# ADMIN_IDS также в .env (Telegram User IDs администраторов)
+
+# ============================================================================
+# НАСТРОЙКИ МОНИТОРИНГА
+# ============================================================================
+monitoring:
+  ping_interval: 60      # Интервал пинга в секундах (10-3600)
+  ping_timeout: 5        # Таймаут пинга в секундах (1-30)
+  ping_attempts: 3       # Попыток перед offline (1-10)
+
+# Настройки баланса
+balance:
+  threshold: 2000.0      # Порог уведомления в USD
+  check_interval: 10800  # Интервал проверки в секундах (3 часа)
+
+# Синхронизация серверов
+sync:
+  servers_interval: 600  # Интервал синхронизации в секундах (10 минут)
+
+# Логирование
+logging:
+  level: INFO            # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Пути
+data:
+  directory: data        # Директория для данных

@@ -1,0 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Виртуальное окружение
+venv/
+ENV/
+env/
+.env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Логи
+logs/
+*.log
+log.txt
+
+# Локальные конфигурации
+config.local.py
+*.local.py
+.env
+.env.local
+.env.*.local
+
+# Runtime data (server cache, balance history, statistics, callback cache)
+# Created at runtime; may contain real server names/IPs - never commit.
+data/
+
+# Конфиденциальные данные
+*.pem
+*.key
+credentials.json
+token.json
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Временные файлы
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Кэш и базы данных
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+
+# Специфичные для проекта
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+tests/
