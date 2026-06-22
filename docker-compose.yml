@@ -1,0 +1,26 @@
+services:
+  bot:
+    build: .
+    image: cloud-ping-monitor
+    container_name: cloud-ping-monitor
+    # Secrets (TELEGRAM_BOT_TOKEN, ADMIN_IDS, provider keys) are read at runtime
+    # from .env — they are NOT baked into the image (.env is in .dockerignore).
+    env_file: .env
+    restart: unless-stopped
+    # Least privilege: drop every Linux capability, then add back only the one
+    # ICMP ping needs. Combined with the setcap'd interpreter in the Dockerfile,
+    # this lets the unprivileged user send raw pings and nothing else.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    # Persist runtime state and logs across restarts/rebuilds.
+    # To inspect these on the host instead, replace each named volume with a bind
+    # mount, e.g. "- ./data:/app/data" (ensure the host dir is writable by UID 1000).
+    volumes:
+      - cpm-data:/app/data
+      - cpm-logs:/app/logs
+
+volumes:
+  cpm-data:
+  cpm-logs:

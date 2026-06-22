@@ -1,0 +1,39 @@
+# systemd unit for running cloud-ping-monitor 24/7 without Docker.
+#
+# Install (adjust paths/user to your deployment):
+#   sudo useradd --system --create-home --home-dir /opt/cloud-ping-monitor cpm
+#   # deploy the code to /opt/cloud-ping-monitor, create the venv and .env there
+#   sudo cp deploy/cloud-ping-monitor.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cloud-ping-monitor
+#   journalctl -u cloud-ping-monitor -f      # follow logs
+
+[Unit]
+Description=cloud-ping-monitor Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cpm
+WorkingDirectory=/opt/cloud-ping-monitor
+EnvironmentFile=/opt/cloud-ping-monitor/.env
+ExecStart=/opt/cloud-ping-monitor/venv/bin/python main.py
+
+# Restart the PROCESS on crash. The in-app supervisor only restarts background
+# tasks, not main.py itself, so this is what keeps the bot alive after a hard crash.
+Restart=on-failure
+RestartSec=10
+
+# Grant raw-socket capability for ICMP ping without running as root. This is the
+# clean, deployment-scoped alternative to `setcap` on the python binary (which an
+# unrelated pip upgrade would silently invalidate).
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+
+# Hardening: prevent the service from gaining new privileges (e.g. via a setuid
+# binary), so the capability restriction above cannot be escaped.
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

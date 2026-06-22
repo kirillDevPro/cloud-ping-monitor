@@ -1,0 +1,34 @@
+# Secrets — never copy into the image (provided at runtime via env_file).
+.env
+.env.*
+
+# Runtime state and logs (mounted as volumes).
+data/
+logs/
+
+# Version control / CI / docs not needed at build time.
+.git/
+.github/
+*.md
+LICENSE
+
+# Local virtual environment.
+venv/
+ENV/
+.venv/
+
+# Local-only tests and tooling caches.
+tests/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Python bytecode.
+__pycache__/
+*.py[cod]
+
+# Editor / OS cruft.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
