@@ -19,12 +19,14 @@ from .inline import (
     get_provider_selection_keyboard,
     get_settings_menu_keyboard,
     get_language_keyboard,
+    SETTINGS_SECTIONS,
 )
 
 __all__ = [
     "get_main_menu_keyboard",
     "get_settings_menu_keyboard",
     "get_language_keyboard",
+    "SETTINGS_SECTIONS",
     "get_monitoring_keyboard",
     "get_server_details_keyboard",
     "get_server_stats_keyboard",

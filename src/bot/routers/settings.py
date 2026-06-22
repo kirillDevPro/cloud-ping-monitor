@@ -24,15 +24,16 @@ from ..i18n import (
     set_user_language,
 )
 from ..keyboards import (
+    SETTINGS_SECTIONS,
     get_language_keyboard,
     get_main_menu_keyboard,
     get_settings_menu_keyboard,
 )
 from ..utils import (
     handle_telegram_errors,
+    reset_screen_from_callback,
     safe_edit_message,
     show_screen,
-    show_screen_from_callback,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,14 @@ settings_router = Router(name="settings")
 
 
 def _menu_text() -> str:
-    """Build the settings hub screen body.
+    """Build the settings hub screen body, listing the available sections.
 
     Returns:
-        str: The HTML hub text (title + the choose-a-section prompt).
+        str: The HTML hub text — title, the choose-a-section prompt, then one line
+            per section in SETTINGS_SECTIONS (its localized label).
     """
-    return _("settings.title") + "\n\n" + _("settings.choose_section")
+    sections = "\n".join(_(section[0]) for section in SETTINGS_SECTIONS)
+    return _("settings.title") + "\n\n" + _("settings.choose_section") + "\n" + sections
 
 
 def _language_text(language: str) -> str:
@@ -126,15 +129,16 @@ async def callback_settings_back(callback: CallbackQuery) -> None:
 @settings_router.callback_query(F.data.startswith("set_lang_"))
 @handle_telegram_errors
 async def callback_set_language(callback: CallbackQuery) -> None:
-    """Persist the chosen language and send one clean main-menu screen in it.
+    """Persist the chosen language and drop to one clean main-menu screen in it.
 
     Stores the choice, activates it for the rest of this update, then replaces the
-    language picker with a single main-menu screen rendered in the new language.
-    Reply-keyboard labels cannot be edited in place, so a language switch must
-    re-send the main menu; routing that through ``show_screen_from_callback``
-    deletes the picker — even when the single-screen tracker is stale after a
-    restart — and tracks the new menu, leaving the chat with one clean screen
-    instead of a leftover (still interactive) picker plus a separate notice.
+    language picker with a single persistent main-menu screen rendered in the new
+    language. Reply-keyboard labels cannot be edited in place, so a language switch
+    must re-send the main menu; routing that through ``reset_screen_from_callback``
+    removes the picker (even when the single-screen tracker is stale after a
+    restart) and sends the menu UNtracked, so its reply keyboard survives later
+    navigation — leaving the chat with one clean screen instead of a leftover
+    (still interactive) picker plus a separate notice.
 
     Args:
         callback: Callback query whose data is ``set_lang_<code>``.
@@ -168,9 +172,9 @@ async def callback_set_language(callback: CallbackQuery) -> None:
         await callback.answer(_("settings.language_not_saved"), show_alert=True)
 
     # Reply-keyboard labels cannot be edited in place, so a language switch must
-    # re-send the main menu. show_screen_from_callback swaps the picker for a single
-    # clean main-menu screen in the new language and deletes the picker even when
-    # the tracker is stale after a restart (no leftover interactive picker).
-    await show_screen_from_callback(
+    # re-send the main menu. reset_screen_from_callback removes the picker and sends
+    # the menu as a PERSISTENT (untracked) screen, so its reply keyboard is not lost
+    # when the user later navigates to another section.
+    await reset_screen_from_callback(
         callback, _("settings.menu_updated"), get_main_menu_keyboard()
     )

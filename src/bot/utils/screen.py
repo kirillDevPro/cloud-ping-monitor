@@ -15,18 +15,19 @@ Inline-keyboard navigation inside a screen is unaffected: those handlers edit th
 message in place (see ``safe_edit_message``), which preserves the tracked
 ``message_id``, so a later reply-button tap still deletes the right message.
 
-``show_screen_from_callback`` covers callback flows that must replace a tapped
-inline message with a new bot screen, such as re-sending the main-menu reply
-keyboard after a language switch. It deletes both the tracked screen and the
-callback source message so a pre-restart picker is cleaned up even when the
-process-local tracker is empty.
+``reset_screen_from_callback`` covers callback flows that must drop back to a
+PERSISTENT screen carrying the reply keyboard (e.g. the main menu after a language
+switch). It sends that screen UNtracked — Telegram drops a reply keyboard if its
+carrier message is deleted, so the anchor must survive later navigation, like the
+``/start`` welcome — then clears tracking and removes both the previously tracked
+screen and the callback's source picker (so a pre-restart picker is cleaned up
+even when the tracker is empty).
 
 State is bot-process-local (a single aiogram polling process), so a plain dict
 keyed by ``chat_id`` is sufficient. It is not persisted: after a restart the
 tracker is empty, so the first reply-button tap cannot delete the pre-restart
 screen (one harmless orphan) and normal single-screen behavior resumes from the
-next tap. Callback replacement is the exception: the callback source message is
-available directly, so it can be deleted even when the tracker is stale.
+next tap.
 """
 
 import asyncio
@@ -179,20 +180,22 @@ async def show_screen(
         return sent
 
 
-async def show_screen_from_callback(
+async def reset_screen_from_callback(
     callback: CallbackQuery,
     text: str,
     reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | None = None,
 ) -> Message | None:
-    """Replace the screen that produced a callback with a brand-new one.
+    """Drop a callback flow back to a fresh PERSISTENT screen.
 
-    Like :func:`show_screen`, but for a callback handler that must swap the inline
-    message the user tapped for a freshly sent screen (e.g. re-sending the
-    main-menu reply keyboard after a language change, which cannot be done with an
-    in-place edit). It sends the new screen (this works even for an
-    ``InaccessibleMessage`` source — its ``answer`` shortcut still targets the
-    chat), records it as this chat's tracked screen, and best-effort removes BOTH
-    the previously tracked screen and the callback's own source message.
+    For a callback handler that ends an interaction by returning to a screen which
+    must persist — typically the main menu re-sent after a language change to
+    refresh the reply-keyboard labels (a reply keyboard cannot be edited in place).
+    It sends that screen (works even for an ``InaccessibleMessage`` source — its
+    ``answer`` shortcut still targets the chat), but unlike :func:`show_screen`
+    does NOT track it: Telegram drops a reply keyboard when its carrier message is
+    deleted, so the new screen must survive later navigation (like the ``/start``
+    welcome). It then clears this chat's tracked section screen and best-effort
+    removes BOTH that old tracked screen and the callback's own source picker.
 
     Cleaning up the source explicitly — not only the tracked one — matters because
     the tracker is process-local and empty after a restart: a pre-restart inline
@@ -202,12 +205,12 @@ async def show_screen_from_callback(
     can no longer fire.
 
     Args:
-        callback: The callback query whose message is being replaced.
+        callback: The callback query whose flow is being reset.
         text: Screen text (HTML, per the bot's default parse mode).
-        reply_markup: Optional keyboard for the new screen.
+        reply_markup: Optional keyboard for the new (persistent) screen.
 
     Returns:
-        The Message sent by the bot (now this chat's tracked screen), or None if
+        The Message sent by the bot (a persistent, untracked screen), or None if
         the callback carries no message to target.
 
     Raises:
@@ -222,15 +225,16 @@ async def show_screen_from_callback(
     async with _lock_for(chat_id):
         sent = await message.answer(text, reply_markup=reply_markup)
 
-        # Commit the new screen to the tracker BEFORE the best-effort deletes (the
-        # delete can be interrupted, which would otherwise orphan the new screen).
-        previous_id = _last_screen_message.get(chat_id)
-        _last_screen_message[chat_id] = sent.message_id
+        # The new screen is a PERSISTENT anchor: it carries the reply keyboard,
+        # which Telegram drops if its carrier message is deleted, so it must NOT be
+        # tracked (later navigation would delete it). Clear any tracked section
+        # screen for this chat instead; the anchor then survives like /start.
+        previous_id = _last_screen_message.pop(chat_id, None)
 
-        # Delete the previously tracked screen AND the callback's source message.
-        # They coincide in the normal in-place-edit flow but diverge when the
-        # tracker is stale (e.g. after a restart), so both are removed; None and the
-        # just-sent id are skipped, and each id is deleted at most once.
+        # Remove the old tracked screen AND the callback's source picker so no
+        # stale/interactive remnant is left. They coincide in the normal
+        # in-place-edit flow but diverge when the tracker is stale (e.g. after a
+        # restart); None and the just-sent id are skipped, each id handled once.
         seen: set[int] = set()
         for message_id in (previous_id, message.message_id):
             if message_id is None or message_id == sent.message_id or message_id in seen:
