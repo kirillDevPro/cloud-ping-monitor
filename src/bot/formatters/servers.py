@@ -4,8 +4,8 @@ from typing import Any
 
 from ...models import Server, ServerStatus, PingStatistics, PingResult
 from ..i18n import _
-from ..utils.rich import blocks, stack, table
-from .common import STATS_METRIC_HEADERS, esc, stats_metric_cells, strip_rule
+from ..utils.rich import blocks, stack
+from .common import esc, stats_metric_line, strip_rule
 
 
 def format_provider_selection(servers: list[Server]) -> str:
@@ -151,7 +151,7 @@ def format_server_control_details(
         sections.append(
             stack(
                 strip_rule(_("details.stats_24h_header")),
-                table(STATS_METRIC_HEADERS, [stats_metric_cells(stats_24h)]),
+                stats_metric_line(stats_24h),
             )
         )
 

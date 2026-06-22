@@ -59,19 +59,11 @@ MESSAGES: dict[str, str] = {
     'mon.list_title': '📊 <b>Monitoreo de servidores</b>',
     'mon.section_servers': '━━━ <b>Servidores</b> ━━━',
     'mon.total_servers': '<b>Servidores totales:</b> {count}',
-    'mon.online': '🟢 En línea: {count}',
-    'mon.offline': '🔴 Fuera de línea: {count}',
-    'mon.unknown': '❓ Desconocido: {count}',
     'mon.status_inline': '🟢 En línea: {online} | 🔴 Fuera de línea: {offline} | ❓ Desconocido: {unknown}',
     'mon.section_finance': '━━━ <b>Finanzas</b> ({count} prov.) ━━━',
     'mon.finance_balance': '💰 Saldo: ${amount:,.2f}',
     'mon.finance_expenses': '📉 Gastos/mes: ${amount:,.2f}',
     'mon.section_stats_24h': '━━━ <b>Estadísticas (24 horas)</b> ━━━',
-    'mon.total_pings': '<b>Pings totales:</b> {value}',
-    'mon.successful': '<b>Exitosos:</b> {value} 🟢',
-    'mon.errors': '<b>Errores:</b> {value} 🔴',
-    'mon.timeout': '<b>Tiempo agotado:</b> {value} ⏱️',
-    'mon.avg_uptime': '<b>Disponibilidad media:</b> {value:.2f}%',
     'mon.no_ping_data': 'Sin datos de ping',
     'mon.section_by_provider': '━━━ <b>Por proveedor</b> ━━━',
     'mon.choose_server': 'Elige un servidor para ver los detalles 👇',
@@ -105,9 +97,6 @@ MESSAGES: dict[str, str] = {
     'time.na': 'n/d',
     # stats
     'stats.title': '📊 <b>Estadísticas: {name}</b>',
-    # col (rich table headers)
-    'col.provider': 'Proveedor',
-    'col.period': 'Período',
     # srv
     'srv.manage_title': '🖥️ <b>Gestión de servidores</b>',
     'srv.empty': (

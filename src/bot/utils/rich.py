@@ -4,8 +4,10 @@ Every screen and every admin notification is rendered as a Telegram *rich
 message* (Bot API 10.1, aiogram 3.29): ``bot.send_rich_message`` /
 ``message.answer_rich`` / ``message.edit_text(rich_message=...)`` carrying an
 :class:`~aiogram.types.InputRichMessage`. This is a separate transport from the
-classic ``parse_mode=HTML`` text path and unlocks document-grade structure —
-tables, collapsible ``<details>``, headings, ``<br>`` line breaks.
+classic ``parse_mode=HTML`` text path and unlocks richer structure —
+collapsible ``<details>`` blocks and ``<br>`` line breaks on top of the classic
+inline tags. The compact screen UI deliberately avoids ``<table>``/``<blockquote>``
+(too tall / boxy on a phone), so no table builder is exposed here.
 
 There is deliberately NO classic fallback and NO feature flag: rich is the only
 path. A payload Telegram rejects raises ``TelegramBadRequest`` and propagates to
@@ -15,7 +17,7 @@ This module owns the rich tag vocabulary in ONE place so the markup is built
 consistently (and a tweak is local), plus the three send/edit entry points the
 rest of the bot calls:
 
-* builders — :func:`stack`, :func:`table`, :func:`details`, :func:`to_rich`; and
+* builders — :func:`stack`, :func:`blocks`, :func:`details`, :func:`to_rich`; and
 * transport — :func:`answer_rich`, :func:`edit_rich`, :func:`send_rich`.
 
 The line-break rule (the one rich gotcha): in rich HTML a bare ``\\n`` between two
@@ -27,7 +29,6 @@ transport boundary so existing templates keep rendering line-by-line.
 """
 
 import logging
-from collections.abc import Iterable, Sequence
 
 from aiogram import Bot, html
 from aiogram.types import (
@@ -126,38 +127,6 @@ def blocks(*parts: object) -> str:
         str: The parts joined by ``<br><br>``.
     """
     return "<br><br>".join(str(p) for p in parts if p)
-
-
-def table(headers: Sequence[object], rows: Iterable[Sequence[object]]) -> str:
-    """Build a rich ``<table>`` with a header row and body rows.
-
-    Header cells and body cells are HTML-escaped (leaf values), so pass raw
-    values — names, counts, amounts, status glyphs — not pre-escaped or marked-up
-    strings. Each row is normalized to the header width: extra cells are dropped
-    and short rows are padded with empty cells, so a ragged row can never produce
-    malformed markup. Telegram caps a rich table at 20 columns.
-
-    Args:
-        headers: The header cell values (defines the column count).
-        rows: An iterable of rows, each an iterable of cell values.
-
-    Returns:
-        str: A single-line ``<table>...</table>`` string (no ``\\n``, so it is
-            safe to combine with :func:`stack` and pass through :func:`to_rich`).
-    """
-    width = len(headers)
-    head = "".join(f"<th>{esc(h)}</th>" for h in headers)
-
-    body_rows: list[str] = []
-    for row in rows:
-        cells = list(row)[:width]
-        cells += [""] * (width - len(cells))
-        body_rows.append("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in cells) + "</tr>")
-
-    return (
-        f"<table><thead><tr>{head}</tr></thead>"
-        f"<tbody>{''.join(body_rows)}</tbody></table>"
-    )
 
 
 def details(summary: str, body_html: str, *, is_open: bool = False) -> str:

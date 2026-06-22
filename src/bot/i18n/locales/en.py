@@ -59,19 +59,11 @@ MESSAGES: dict[str, str] = {
     'mon.list_title': '📊 <b>Server monitoring</b>',
     'mon.section_servers': '━━━ <b>Servers</b> ━━━',
     'mon.total_servers': '<b>Total servers:</b> {count}',
-    'mon.online': '🟢 Online: {count}',
-    'mon.offline': '🔴 Offline: {count}',
-    'mon.unknown': '❓ Unknown: {count}',
     'mon.status_inline': '🟢 Online: {online} | 🔴 Offline: {offline} | ❓ Unknown: {unknown}',
     'mon.section_finance': '━━━ <b>Finances</b> ({count} prov.) ━━━',
     'mon.finance_balance': '💰 Balance: ${amount:,.2f}',
     'mon.finance_expenses': '📉 Expenses/mo: ${amount:,.2f}',
     'mon.section_stats_24h': '━━━ <b>Statistics (24 hours)</b> ━━━',
-    'mon.total_pings': '<b>Total pings:</b> {value}',
-    'mon.successful': '<b>Successful:</b> {value} 🟢',
-    'mon.errors': '<b>Errors:</b> {value} 🔴',
-    'mon.timeout': '<b>Timeout:</b> {value} ⏱️',
-    'mon.avg_uptime': '<b>Average uptime:</b> {value:.2f}%',
     'mon.no_ping_data': 'No ping data',
     'mon.section_by_provider': '━━━ <b>By provider</b> ━━━',
     'mon.choose_server': 'Choose a server to view details 👇',
@@ -105,9 +97,6 @@ MESSAGES: dict[str, str] = {
     'time.na': 'n/a',
     # stats
     'stats.title': '📊 <b>Statistics: {name}</b>',
-    # col (rich table headers)
-    'col.provider': 'Provider',
-    'col.period': 'Period',
     # srv
     'srv.manage_title': '🖥️ <b>Server management</b>',
     'srv.empty': (

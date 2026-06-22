@@ -13,31 +13,60 @@ from ..i18n import _
 # adds <u>/<s> to a summary label is handled too.
 _INLINE_TAG_RE = re.compile(r"</?(?:b|i|u|s|code)>")
 
-# Emoji-only column headers for a per-period ping-statistics table: uptime,
-# successful/total pings, average latency. No localization (universal glyphs).
-STATS_METRIC_HEADERS = ["⬆️", "✓", "⚡"]
+
+# Provider type -> colored UI circle, matched by alias prefix. Keeps the on-screen
+# marker consistent wherever only the alias (not the ASCII log emoji) is at hand.
+_PROVIDER_EMOJI_BY_PREFIX: tuple[tuple[str, str], ...] = (
+    ("hetzner", "🔴"),
+    ("vultr", "🔵"),
+    ("aws", "🟠"),
+)
 
 
-def stats_metric_cells(stats: PingStatistics) -> list[str]:
-    """Return the [uptime, successful/total, avg-latency] table cells for a stats row.
+def provider_emoji(alias: str) -> str:
+    """Return the colored UI circle for a provider alias (by hetzner/vultr/aws prefix).
 
-    Shared by every 24-hour / per-period statistics table (monitoring detail,
-    server statistics, server control card) so the metric columns stay identical.
+    Args:
+        alias: Provider alias (e.g. "vultr_main", "hetzner_prod", "aws_main").
+
+    Returns:
+        str: The matching colored circle, or a cloud fallback for an unknown prefix.
+    """
+    lowered = alias.lower()
+    for prefix, emoji in _PROVIDER_EMOJI_BY_PREFIX:
+        if lowered.startswith(prefix):
+            return emoji
+    return "☁️"
+
+
+def stats_metric_line(stats: PingStatistics) -> str:
+    """Return one compact stats line: uptime · successful/total · errors · latency.
+
+    Shared by every 24-hour / per-period statistics display (monitoring detail,
+    server statistics, server control card) so the metrics read identically. Emoji
+    anchors keep it scannable without a table. The failure (🔴) and timeout (⏱)
+    segments appear only when non-zero, so a healthy period stays short while a bad
+    one still distinguishes ICMP failures from timeouts; latency is shown only when
+    there was at least one successful ping.
 
     Args:
         stats: A non-empty statistics record.
 
     Returns:
-        list[str]: Three cells aligned with :data:`STATS_METRIC_HEADERS` — uptime
-            percentage, ``successful/total`` pings, and average latency (``—``
-            when there were no successful pings).
+        str: e.g. ``⬆ 100% · ✓ 381/381 · ⚡ 24ms`` (healthy) or
+            ``⬆ 95% · ✓ 95/100 · 🔴 3 · ⏱ 2 · ⚡ 150ms`` (with failures/timeouts).
     """
-    avg = f"{stats.avg_response_time_ms:.0f}ms" if stats.successful_pings > 0 else "—"
-    return [
-        f"{stats.uptime_percentage:.0f}%",
-        f"{stats.successful_pings}/{stats.total_pings}",
-        avg,
+    parts = [
+        f"⬆ {stats.uptime_percentage:.0f}%",
+        f"✓ {stats.successful_pings}/{stats.total_pings}",
     ]
+    if stats.failed_pings > 0:
+        parts.append(f"🔴 {stats.failed_pings}")
+    if stats.timeout_pings > 0:
+        parts.append(f"⏱ {stats.timeout_pings}")
+    if stats.successful_pings > 0:
+        parts.append(f"⚡ {stats.avg_response_time_ms:.0f}ms")
+    return " · ".join(parts)
 
 
 def esc(value: object) -> str:

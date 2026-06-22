@@ -10,13 +10,13 @@ from ...storage import SqliteStatisticsRepository
 from ...storage.balance import BalanceRepository
 from ...providers.manager import ProviderManager
 from ..i18n import _
-from ..utils.rich import blocks, details, stack, table
+from ..utils.rich import blocks, details, stack
 from .common import (
-    STATS_METRIC_HEADERS,
     esc,
     format_number,
     plain,
-    stats_metric_cells,
+    provider_emoji,
+    stats_metric_line,
     strip_rule,
 )
 from .balance import collect_provider_balances
@@ -70,7 +70,7 @@ def format_monitoring_dashboard(
             unknown_count += 1
 
         # Count servers per provider_alias (effective_alias accounts for legacy)
-        provider_key = server.effective_alias.upper()
+        provider_key = server.effective_alias
         if provider_key not in provider_stats:
             provider_stats[provider_key] = {"total": 0, "online": 0, "offline": 0}
         provider_stats[provider_key]["total"] += 1
@@ -100,24 +100,20 @@ def format_monitoring_dashboard(
     # Compute the average uptime
     avg_uptime = uptime_sum / servers_with_stats if servers_with_stats > 0 else 0.0
 
-    # Build the rich screen as blank-line-separated sections (blocks), each a
-    # stack of <br>-joined lines. strip_rule() drops the legacy ━━━ section
-    # decoration from the reused catalog headers; tables carry the genuinely
-    # columnar data (per-provider breakdown).
+    # Build a compact rich screen: a bold title then blank-line-separated
+    # sections of <br>-stacked lines (no cards, no tables) so the whole dashboard
+    # fits one phone screen. strip_rule() drops the legacy ━━━ header decoration.
     sections: list[str] = [_("mon.dashboard_title")]
 
-    # Section: overall server status (header + counts).
+    # Servers: header (with total) + status counts on a single inline line.
     sections.append(
         stack(
-            strip_rule(_("mon.section_servers")),
-            _("mon.total_servers", count=total_servers),
-            _("mon.online", count=online_count),
-            _("mon.offline", count=offline_count),
-            _("mon.unknown", count=unknown_count),
+            strip_rule(_("mon.section_servers")) + f" — {total_servers}",
+            f"🟢 {online_count} · 🔴 {offline_count} · ❓ {unknown_count}",
         )
     )
 
-    # Section: finances (only when at least one provider reports balance).
+    # Finances (only when at least one provider reports balance).
     if balance_repo is not None and provider_manager is not None:
         provider_balances = collect_provider_balances(balance_repo, provider_manager)
 
@@ -156,27 +152,22 @@ def format_monitoring_dashboard(
                 )
             )
 
-    # Section: per-provider breakdown as a table (provider | total | online | offline).
+    # Per-provider breakdown as compact lines (emoji + alias + online/total).
     if provider_stats:
-        provider_rows = [
-            [provider, stats["total"], stats["online"], stats["offline"]]
-            for provider, stats in sorted(provider_stats.items())
-        ]
-        sections.append(
-            stack(
-                strip_rule(_("mon.section_by_provider")),
-                table([_("col.provider"), "🖥️", "🟢", "🔴"], provider_rows),
-            )
-        )
+        provider_lines: list[str] = []
+        for alias, stats in sorted(provider_stats.items()):
+            line = f"{provider_emoji(alias)} {esc(alias)} · 🟢 {stats['online']}/{stats['total']}"
+            if stats["offline"] > 0:
+                line += f" · 🔴 {stats['offline']}"
+            provider_lines.append(line)
+        sections.append(stack(strip_rule(_("mon.section_by_provider")), *provider_lines))
 
-    # Section: aggregate ping statistics for the last 24 hours.
+    # Aggregate 24-hour ping statistics on a single compact line.
     if total_pings > 0:
-        stats_body = stack(
-            _("mon.total_pings", value=format_number(total_pings)),
-            _("mon.successful", value=format_number(successful_pings)),
-            _("mon.errors", value=format_number(failed_pings)),
-            _("mon.timeout", value=format_number(timeout_pings)),
-            _("mon.avg_uptime", value=avg_uptime),
+        stats_body = (
+            f"✅ {format_number(successful_pings)}/{format_number(total_pings)}"
+            f" · ❌ {format_number(failed_pings)} · ⏱ {format_number(timeout_pings)}"
+            f" · ⬆ {avg_uptime:.2f}%"
         )
     else:
         stats_body = _("mon.no_ping_data")
@@ -232,20 +223,19 @@ def format_servers_list(servers: list[Server], shared_state: DictProxy, page: in
     )
 
 
-def _stats_period_row(period_label: str, stats: PingStatistics | None) -> list[object]:
-    """Return a statistics table row for one period (label + metric cells).
+def _stats_period_line(period_label: str, stats: PingStatistics | None) -> str:
+    """Return one compact statistics line for a period.
 
     Args:
-        period_label: Short period label for the first column (e.g. "1h").
+        period_label: Short period label (e.g. "1h").
         stats: The period's statistics, or None / empty when no data exists.
 
     Returns:
-        list[object]: ``[label, uptime, successful/total, avg]`` — metric cells
-            are ``—`` when the period has no pings.
+        str: ``label · ⬆..·✓..·⚡..`` (or ``label · —`` when the period has no pings).
     """
     if stats is None or stats.total_pings == 0:
-        return [period_label, "—", "—", "—"]
-    return [period_label, *stats_metric_cells(stats)]
+        return f"{period_label} · —"
+    return f"{period_label} · {stats_metric_line(stats)}"
 
 
 def format_server_details(
@@ -313,14 +303,14 @@ def format_server_details(
         stack(*info_lines),
     ]
 
-    # 24-hour statistics as a compact metric table (only with real data:
+    # 24-hour statistics on one compact line (only with real data:
     # get_recent_statistics() returns a non-None record with total_pings=0 for a
     # no-data window, matching the total_pings>0 guard used at every other site).
     if stats_24h and stats_24h.total_pings > 0:
         sections.append(
             stack(
                 strip_rule(_("details.stats_24h_header")),
-                table(STATS_METRIC_HEADERS, [stats_metric_cells(stats_24h)]),
+                stats_metric_line(stats_24h),
             )
         )
 
@@ -371,16 +361,12 @@ def format_statistics(
     Returns:
         Formatted rich-HTML text with the statistics in the active language.
     """
-    # One table, one row per period (1h / 24h / 7d), columns: uptime, successful/
-    # total, average latency. Empty periods render as "—" cells.
+    # One compact line per period (1h / 24h / 7d); empty periods render as "—".
     return blocks(
         _("stats.title", name=esc(server.get_display_name())),
-        table(
-            [_("col.period"), *STATS_METRIC_HEADERS],
-            [
-                _stats_period_row("1h", stats_1h),
-                _stats_period_row("24h", stats_24h),
-                _stats_period_row("7d", stats_7d),
-            ],
+        stack(
+            _stats_period_line("1h", stats_1h),
+            _stats_period_line("24h", stats_24h),
+            _stats_period_line("7d", stats_7d),
         ),
     )

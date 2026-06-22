@@ -9,7 +9,7 @@ from ...storage.balance import (
 )
 from ...providers.manager import ProviderManager
 from ..i18n import _, plural
-from ..utils.rich import blocks, details, stack, table
+from ..utils.rich import blocks, details, stack
 from .common import format_days_as_period, esc, plain
 
 
@@ -141,30 +141,25 @@ def format_balance_main(provider_balances: dict) -> str:
 
     sections: list[str] = [_("bal.main_title")]
 
-    # Section 1: Available funds as a table (provider | balance). Table cells are
-    # escaped by the builder, so names are passed raw.
+    # Section 1: Available funds as compact lines (provider: balance).
     if available_balances or postpaid_providers:
-        funds_rows: list[list[object]] = [
-            [f"{_ui_emoji(emoji)} {name}", f"${balance:,.2f}"]
+        funds_lines = [
+            f"{_ui_emoji(emoji)} {esc(name)}: <b>${balance:,.2f}</b>"
             for emoji, name, balance in available_balances
         ]
-        funds_rows += [
-            [f"{_ui_emoji(emoji)} {name}", f"— {_('bal.postpaid_suffix')}"]
+        funds_lines += [
+            f"{_ui_emoji(emoji)} {esc(name)}: — <i>{_('bal.postpaid_suffix')}</i>"
             for emoji, name in postpaid_providers
         ]
-        sections.append(
-            stack(_("bal.available_funds"), table([_("col.provider"), "💰"], funds_rows))
-        )
+        sections.append(stack(_("bal.available_funds"), *funds_lines))
 
-    # Section 2: Charges for the current month as a table.
+    # Section 2: Charges for the current month as compact lines.
     if monthly_expenses:
-        expense_rows: list[list[object]] = [
-            [f"{_ui_emoji(emoji)} {name}", f"${amount:,.2f}"]
+        expense_lines = [
+            f"{_ui_emoji(emoji)} {esc(name)}: ${amount:,.2f}"
             for emoji, name, amount in monthly_expenses
         ]
-        sections.append(
-            stack(_("bal.monthly_expenses"), table([_("col.provider"), "📉"], expense_rows))
-        )
+        sections.append(stack(_("bal.monthly_expenses"), *expense_lines))
 
     # Section 3: Unavailable providers (stacked lines — italic suffix needs tags,
     # so names are escaped explicitly here rather than via a table cell).
@@ -210,21 +205,19 @@ def format_balance_history(
     if not records:
         return blocks(title, _("bal.history_insufficient"), _("bal.history_wait"))
 
-    # Newest first, last 10 records, rendered as a table (date | provider | value).
+    # Newest first, last 10 records, one compact line each.
     sorted_records = sorted(records, key=lambda r: r.timestamp, reverse=True)
-    history_rows: list[list[object]] = []
+    history_lines: list[str] = []
     for record in sorted_records[:10]:
         # Use provider_alias if present, otherwise provider_type for legacy
         record_alias = record.provider_alias or record.provider_type
-        history_rows.append(
-            [
-                record.timestamp.strftime("%Y-%m-%d %H:%M"),
-                f"{_ui_emoji(provider_emojis.get(record_alias, ''))} {record_alias}",
-                record.format_summary(),
-            ]
+        emoji = _ui_emoji(provider_emojis.get(record_alias, ""))
+        timestamp = record.timestamp.strftime("%Y-%m-%d %H:%M")
+        history_lines.append(
+            f"{timestamp} · {emoji} {esc(record_alias)}: {esc(record.format_summary())}"
         )
 
-    sections: list[str] = [title, table(["📅", _("col.provider"), "💵"], history_rows)]
+    sections: list[str] = [title, stack(*history_lines)]
 
     if len(sorted_records) > 10:
         sections.append(plural("bal.history_more", len(sorted_records) - 10))

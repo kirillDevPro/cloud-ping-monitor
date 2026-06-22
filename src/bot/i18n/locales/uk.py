@@ -59,19 +59,11 @@ MESSAGES: dict[str, str] = {
     'mon.list_title': '📊 <b>Моніторинг серверів</b>',
     'mon.section_servers': '━━━ <b>Сервери</b> ━━━',
     'mon.total_servers': '<b>Усього серверів:</b> {count}',
-    'mon.online': '🟢 Онлайн: {count}',
-    'mon.offline': '🔴 Офлайн: {count}',
-    'mon.unknown': '❓ Невідомо: {count}',
     'mon.status_inline': '🟢 Онлайн: {online} | 🔴 Офлайн: {offline} | ❓ Невідомо: {unknown}',
     'mon.section_finance': '━━━ <b>Фінанси</b> ({count} пров.) ━━━',
     'mon.finance_balance': '💰 Баланс: ${amount:,.2f}',
     'mon.finance_expenses': '📉 Витрати/міс: ${amount:,.2f}',
     'mon.section_stats_24h': '━━━ <b>Статистика за 24 години</b> ━━━',
-    'mon.total_pings': '<b>Усього пінгів:</b> {value}',
-    'mon.successful': '<b>Успішно:</b> {value} 🟢',
-    'mon.errors': '<b>Помилки:</b> {value} 🔴',
-    'mon.timeout': '<b>Тайм-аути:</b> {value} ⏱️',
-    'mon.avg_uptime': '<b>Середній аптайм:</b> {value:.2f}%',
     'mon.no_ping_data': 'Немає даних про пінги',
     'mon.section_by_provider': '━━━ <b>За провайдерами</b> ━━━',
     'mon.choose_server': 'Оберіть сервер для перегляду деталей 👇',
@@ -105,9 +97,6 @@ MESSAGES: dict[str, str] = {
     'time.na': 'н/д',
     # stats
     'stats.title': '📊 <b>Статистика: {name}</b>',
-    # col (rich table headers)
-    'col.provider': 'Провайдер',
-    'col.period': 'Період',
     # srv
     'srv.manage_title': '🖥️ <b>Керування серверами</b>',
     'srv.empty': (
