@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from aiogram import Bot
 
-from ..bot.notifications import send_critical_error_notification
+from ..bot.notifications import Renderer, render_message, render_plural, send_critical_error_notification
 
 if TYPE_CHECKING:
     from ..monitoring.ping_manager import PingManager
@@ -20,15 +20,18 @@ WORKERS_HEALTH_INTERVAL = 30
 
 
 async def _safe_critical_alert(
-    bot: Bot, admin_ids: list[int], error_type: str, error_message: str
+    bot: Bot, admin_ids: list[int], *, title_key: str, body: Renderer
 ) -> bool:
     """Send a critical admin alert, swallowing any failure (must never break the loop).
+
+    The alert is rendered per recipient in each admin's language; callers pass i18n
+    keys via render_message()/render_plural() rather than pre-rendered text.
 
     Args:
         bot: Bot used to deliver the alert.
         admin_ids: Administrator IDs to notify.
-        error_type: Short alert category shown in the header.
-        error_message: Alert body.
+        title_key: Catalog key for the short alert category shown in the header.
+        body: Per-recipient renderer producing the alert body for a given language.
 
     Returns:
         bool: True if delivered to at least one administrator, False otherwise. Debounced
@@ -36,10 +39,10 @@ async def _safe_critical_alert(
     """
     try:
         return await send_critical_error_notification(
-            bot=bot, admin_ids=admin_ids, error_type=error_type, error_message=error_message
+            bot=bot, admin_ids=admin_ids, title_key=title_key, body=body
         )
     except Exception as e:
-        logger.error(f"Failed to send subsystem alert '{error_type}': {e}", exc_info=True)
+        logger.error(f"Failed to send subsystem alert '{title_key}': {e}", exc_info=True)
         return False
 
 
@@ -59,16 +62,17 @@ async def _alert_worker_abandoned(
         admin_ids: Administrator IDs to notify.
         server_key: Composite key of the abandoned server.
         servers_repo: Repository used to resolve a human-readable server label.
+
+    Returns:
+        None.
     """
     server = servers_repo.get_by_composite_key(server_key)
     label = f"{server.name} ({server.ip})" if server else server_key
     await _safe_critical_alert(
         bot,
         admin_ids,
-        "Мониторинг сервера остановлен",
-        f"Воркер мониторинга сервера {label} несколько раз подряд аварийно завершался "
-        f"и был остановлен. Сервер временно не мониторится — будет автоматическая "
-        f"повторная попытка позже. Проверьте сервер и сеть.",
+        title_key="alert.worker_abandoned.title",
+        body=render_message("alert.worker_abandoned.body", label=label),
     )
 
 
@@ -88,7 +92,11 @@ class _SubsystemHealthMonitor:
     QUEUE_FILL_THRESHOLD = 0.8
 
     def __init__(self) -> None:
-        """Initialize all debounce counters/flags to a healthy state."""
+        """Initialize all debounce counters/flags to a healthy state.
+
+        Returns:
+            None.
+        """
         self._manager_dead_alerted = False
         self._zero_workers_count = 0
         self._zero_workers_alerted = False
@@ -105,6 +113,9 @@ class _SubsystemHealthMonitor:
             enabled_count: Number of enabled (expected-to-be-monitored) servers.
             bot: Bot used for admin alerts.
             admin_ids: Administrator IDs to notify.
+
+        Returns:
+            None.
         """
         # Each alert sets its debounce flag ONLY after a confirmed delivery, so a failed
         # send is retried on the next cycle instead of being silently suppressed for the
@@ -116,10 +127,8 @@ class _SubsystemHealthMonitor:
                 if await _safe_critical_alert(
                     bot,
                     admin_ids,
-                    "Ядро мониторинга недоступно",
-                    "Процесс Manager (хранит статусы серверов) не отвечает. Обновление "
-                    "статусов и часть мониторинга нарушены. Вероятно, потребуется "
-                    "перезапуск бота.",
+                    title_key="alert.core_unavailable.title",
+                    body=render_message("alert.core_unavailable.body"),
                 ):
                     self._manager_dead_alerted = True
         else:
@@ -138,9 +147,8 @@ class _SubsystemHealthMonitor:
                 if await _safe_critical_alert(
                     bot,
                     admin_ids,
-                    "Мониторинг полностью остановлен",
-                    f"Ни один из {enabled_count} серверов не мониторится (нет живых "
-                    f"воркеров) уже несколько проверок подряд. Проверьте бота и логи.",
+                    title_key="alert.monitoring_stopped.title",
+                    body=render_plural("alert.no_servers_monitored.body", enabled_count),
                 ):
                     self._zero_workers_alerted = True
         else:
@@ -155,10 +163,8 @@ class _SubsystemHealthMonitor:
                 if await _safe_critical_alert(
                     bot,
                     admin_ids,
-                    "Очередь результатов переполняется",
-                    f"Очередь результатов пинга заполнена на ~{ratio * 100:.0f}% уже "
-                    f"несколько проверок подряд — обработчик результатов, похоже, завис "
-                    f"или умер. Статистика и уведомления могут теряться.",
+                    title_key="alert.queue_overflow.title",
+                    body=render_message("alert.queue_overflow.body", ratio=ratio * 100),
                 ):
                     self._queue_full_alerted = True
         else:
@@ -207,6 +213,9 @@ async def workers_health_task(
 
     Raises:
         asyncio.CancelledError: Re-raised when the task is cancelled (on shutdown).
+
+    Returns:
+        None.
     """
     logger.info(f"Worker health task started (every {interval_seconds}s)")
     health_monitor = _SubsystemHealthMonitor()

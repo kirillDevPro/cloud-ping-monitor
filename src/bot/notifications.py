@@ -1,30 +1,118 @@
-"""Functions for sending administrator notifications and reporting delivery status."""
+"""Functions for sending administrator notifications and reporting delivery status.
+
+Every notification is BROADCAST to all administrators, who may each have a
+different UI language. Delivery therefore renders the message PER RECIPIENT in
+that admin's stored language: each ``send_*`` builds a ``render(language) -> str``
+callback, and :func:`_broadcast_to_admins` resolves every admin's language and
+renders the message for them individually.
+
+Background tasks that raise generic critical alerts pass i18n keys (not
+pre-rendered text) via :func:`render_message` / :func:`render_plural`, so those
+alerts are localized per recipient too.
+"""
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramRetryAfter
 
 from .formatters.common import esc
+from .i18n import get_user_language, translate, translate_plural
 
 logger = logging.getLogger(__name__)
 
+# A per-recipient renderer: given a language code, returns the message for it.
+Renderer = Callable[[str], str]
+
+
+def _escape_str_kwargs(kwargs: dict[str, object]) -> dict[str, object]:
+    """HTML-escape string values in a kwargs mapping, passing non-strings through.
+
+    Messages are sent with parse_mode=HTML, so any externally-sourced string
+    (server name, provider label, error text) must be escaped before it is
+    interpolated into a template. Numbers and other non-strings are left as-is so
+    their format specs (e.g. ``{ratio:.0f}``) still apply.
+
+    Args:
+        kwargs: Substitution values for a translation template.
+
+    Returns:
+        dict[str, object]: The same mapping with string values HTML-escaped.
+    """
+    return {key: (esc(value) if isinstance(value, str) else value) for key, value in kwargs.items()}
+
+
+def render_message(key: str, **kwargs: object) -> Renderer:
+    """Build a per-recipient renderer for a plain catalog key.
+
+    String kwargs are HTML-escaped once up front (language-independent), so the
+    returned closure only needs to resolve the template per language. Intended for
+    background-task alert bodies that pass i18n keys instead of pre-rendered text.
+
+    Args:
+        key: Catalog message key.
+        **kwargs: Substitution values (string values are HTML-escaped).
+
+    Returns:
+        Renderer: ``language -> localized, formatted string``.
+    """
+    safe = _escape_str_kwargs(kwargs)
+    return lambda language: translate(key, language, **safe)
+
+
+def render_plural(key: str, n: int, **kwargs: object) -> Renderer:
+    """Build a per-recipient renderer for a plural-aware catalog key.
+
+    Args:
+        key: Catalog plural key.
+        n: The count selecting the plural form (also exposed as ``{n}``).
+        **kwargs: Extra substitution values (string values are HTML-escaped).
+
+    Returns:
+        Renderer: ``language -> localized, formatted plural string``.
+    """
+    safe = _escape_str_kwargs(kwargs)
+    return lambda language: translate_plural(key, n, language, **safe)
+
+
+def _render_duration(seconds: int) -> Renderer:
+    """Build a per-recipient renderer for an outage duration ("~X h" / "~Y min").
+
+    The duration must be localized PER RECIPIENT (an English admin should not see
+    Russian unit abbreviations), so it is rendered inside the broadcast loop rather
+    than pre-formatted. Mirrors the original hour/minute thresholds.
+
+    Args:
+        seconds: Outage duration in seconds.
+
+    Returns:
+        Renderer: ``language -> localized duration string``.
+    """
+    hours = seconds / 3600
+    if hours >= 1:
+        return lambda language: translate("outage.duration_hours", language, hours=hours)
+    minutes = max(1, seconds // 60)
+    return lambda language: translate("outage.duration_minutes", language, minutes=minutes)
+
 
 async def _broadcast_to_admins(
-    bot: Bot, admin_ids: list[int], message: str, *, log_label: str
+    bot: Bot, admin_ids: list[int], render: Renderer, *, log_label: str
 ) -> bool:
     """
-    Broadcast a message to all administrators with uniform Telegram error handling.
+    Broadcast a per-recipient-rendered message to all administrators.
 
-    Each admin send is attempted independently. Telegram flood-control errors are retried
-    once after the requested delay; all Telegram and unexpected client/session errors are
-    logged and swallowed so notification failures do not crash background processors.
+    The message is rendered for each admin in that admin's stored language. Each
+    send is attempted independently. Telegram flood-control errors are retried
+    once after the requested delay; all Telegram and unexpected client/session
+    errors are logged and swallowed so notification failures do not crash
+    background processors.
 
     Args:
         bot: Bot instance
         admin_ids: List of administrator IDs
-        message: HTML text of the message
+        render: Callback that renders the message for a given language code
         log_label: Lowercase notification label used in logs
             (for example, "server down notification")
 
@@ -37,6 +125,8 @@ async def _broadcast_to_admins(
     label_capitalized = log_label[:1].upper() + log_label[1:]
     delivered = False
     for admin_id in admin_ids:
+        # Render in the recipient's own language.
+        message = render(get_user_language(admin_id))
         try:
             await bot.send_message(admin_id, message)
             logger.info(f"{label_capitalized} sent to admin {admin_id}")
@@ -91,15 +181,30 @@ async def send_server_down_notification(
     Returns:
         bool: True if delivered to at least one administrator (see _broadcast_to_admins).
     """
-    message = (
-        "🔴 <b>Сервер недоступен</b>\n\n"
-        f"Сервер <b>{esc(server_name)}</b> ({esc(server_ip)}) перестал отвечать на ping."
+    name, ip = esc(server_name), esc(server_ip)
+    error_safe = esc(error) if error else None
+
+    def render(language: str) -> str:
+        """Render the server-down message in one recipient language.
+
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized server-down notification body.
+        """
+        message = (
+            translate("notif.server_down.title", language)
+            + "\n\n"
+            + translate("notif.server_down.body", language, name=name, ip=ip)
+        )
+        if error_safe is not None:
+            message += "\n\n" + translate("notif.error_label", language, error=error_safe)
+        return message
+
+    return await _broadcast_to_admins(
+        bot, admin_ids, render, log_label="server down notification"
     )
-
-    if error:
-        message += f"\n\n<b>Ошибка:</b> {esc(error)}"
-
-    return await _broadcast_to_admins(bot, admin_ids, message, log_label="server down notification")
 
 
 async def send_server_up_notification(
@@ -122,15 +227,29 @@ async def send_server_up_notification(
     Returns:
         bool: True if delivered to at least one administrator (see _broadcast_to_admins).
     """
-    message = (
-        "🟢 <b>Сервер восстановлен</b>\n\n"
-        f"Сервер <b>{esc(server_name)}</b> ({esc(server_ip)}) снова доступен."
-    )
+    name, ip = esc(server_name), esc(server_ip)
 
-    if response_time_ms is not None:
-        message += f"\n\n<b>Время отклика:</b> {response_time_ms:.2f} ms"
+    def render(language: str) -> str:
+        """Render the server-up message in one recipient language.
 
-    return await _broadcast_to_admins(bot, admin_ids, message, log_label="server up notification")
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized server-up notification body.
+        """
+        message = (
+            translate("notif.server_up.title", language)
+            + "\n\n"
+            + translate("notif.server_up.body", language, name=name, ip=ip)
+        )
+        if response_time_ms is not None:
+            message += "\n\n" + translate(
+                "notif.response_time_label", language, ms=f"{response_time_ms:.2f}"
+            )
+        return message
+
+    return await _broadcast_to_admins(bot, admin_ids, render, log_label="server up notification")
 
 
 async def send_low_balance_notification(
@@ -153,66 +272,95 @@ async def send_low_balance_notification(
         threshold: Threshold value in USD
         days_left: Forecast of days until depletion, if available
         provider_name: Provider name (VULTR, HETZNER, etc.)
+
+    Returns:
+        None.
     """
-    safe_provider = esc(provider_name)
-    message = (
-        f"🔴 <b>Низкий баланс {safe_provider}</b>\n\n"
-        f"Текущий баланс <b>${balance:.2f}</b> ниже порога <b>${threshold:.2f}</b>.\n\n"
-    )
+    provider = esc(provider_name)
 
-    if days_left is not None and days_left > 0:
-        message += f"⏳ <b>Прогноз:</b> ~{int(days_left)} дней до исчерпания\n\n"
-    elif days_left == 0:
-        message += "⚠️ <b>Баланс исчерпан!</b>\n\n"
+    def render(language: str) -> str:
+        """Render the low-balance message in one recipient language.
 
-    message += f"💡 Пополните баланс в личном кабинете {safe_provider}."
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized low-balance notification body.
+        """
+        message = (
+            translate("notif.low_balance.title", language, provider=provider)
+            + "\n\n"
+            + translate("notif.low_balance.body", language, balance=balance, threshold=threshold)
+            + "\n\n"
+        )
+        if days_left is not None and days_left > 0:
+            message += (
+                translate_plural("notif.low_balance.forecast", int(days_left), language) + "\n\n"
+            )
+        elif days_left is not None and days_left <= 0:
+            # <= 0 (not == 0) so a tiny negative float from the burn-rate division
+            # on a fully-depleted balance still shows the "depleted" line.
+            message += translate("notif.low_balance.depleted", language) + "\n\n"
+        message += translate("notif.low_balance.top_up", language, provider=provider)
+        return message
 
     await _broadcast_to_admins(
-        bot, admin_ids, message, log_label=f"low balance notification for {provider_name}"
+        bot, admin_ids, render, log_label=f"low balance notification for {provider_name}"
     )
 
 
 async def send_critical_error_notification(
     bot: Bot,
     admin_ids: list[int],
-    error_type: str,
-    error_message: str,
-    details: dict | None = None,
+    *,
+    title_key: str,
+    body: Renderer,
+    title_kwargs: dict[str, object] | None = None,
 ) -> bool:
     """
-    Send a critical error notification to administrators.
+    Send a critical error notification to administrators, localized per recipient.
 
-    Used to alert about critical problems that require immediate attention
-    (for example, an invalid API token or access issues).
+    Used to alert about critical problems that require immediate attention (an
+    invalid API token, a dead subsystem, a stalled background task). The body is
+    a per-recipient renderer (built with :func:`render_message` /
+    :func:`render_plural`, or a custom closure) so callers pass i18n keys, not
+    pre-rendered text.
 
     Args:
         bot: Bot instance
         admin_ids: List of administrator IDs
-        error_type: Error type (for example, "Vultr API", "Hetzner API", "Storage", "IPC")
-        error_message: Error message text
-        details: Additional error details (optional)
+        title_key: Catalog key for the short alert category shown in the header
+            (interpolated into "Critical error: {error_type}").
+        body: Renderer producing the alert body for a given language.
+        title_kwargs: Optional substitutions for the title key (string values are
+            HTML-escaped).
 
     Returns:
         bool: True if delivered to at least one administrator (see _broadcast_to_admins).
             Callers that retry until delivered (e.g. the stall watchdog) gate on this.
     """
-    message = f"🔴 <b>Критическая ошибка: {esc(error_type)}</b>\n\n" f"{esc(error_message)}\n\n"
+    safe_title_kwargs = _escape_str_kwargs(title_kwargs or {})
 
-    if details:
-        message += "<b>Детали:</b>\n"
-        for key, value in details.items():
-            # Do not expose sensitive data (tokens, passwords)
-            if any(
-                sensitive in key.lower() for sensitive in ["token", "key", "password", "secret"]
-            ):
-                value = "***скрыто***"
-            message += f"• <code>{esc(key)}</code>: {esc(value)}\n"
-        message += "\n"
+    def render(language: str) -> str:
+        """Render the critical-error message in one recipient language.
 
-    message += "⚠️ Проверьте логи приложения для дополнительной информации."
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized critical-error notification body.
+        """
+        error_type = translate(title_key, language, **safe_title_kwargs)
+        return (
+            translate("notif.critical.title", language, error_type=error_type)
+            + "\n\n"
+            + body(language)
+            + "\n\n"
+            + translate("notif.critical.check_logs", language)
+        )
 
     return await _broadcast_to_admins(
-        bot, admin_ids, message, log_label="critical error notification"
+        bot, admin_ids, render, log_label="critical error notification"
     )
 
 
@@ -220,7 +368,7 @@ async def send_provider_outage_notification(
     bot: Bot,
     admin_ids: list[int],
     provider_label: str,
-    duration_text: str,
+    duration_seconds: int,
     failures: int,
     last_error: str,
 ) -> None:
@@ -237,20 +385,43 @@ async def send_provider_outage_notification(
         bot: Bot instance
         admin_ids: List of administrator IDs
         provider_label: Human-readable provider name (display_name)
-        duration_text: Outage duration (for example, "~1.5 h")
+        duration_seconds: Outage duration in seconds (localized per recipient)
         failures: Number of consecutive failed checks
         last_error: Text of the last error
+
+    Returns:
+        None.
     """
-    message = (
-        f"⚠️ <b>Провайдер недоступен: {esc(provider_label)}</b>\n\n"
-        f"Не отвечает уже {esc(duration_text)} ({failures} проверок подряд).\n\n"
-        f"<b>Последняя ошибка:</b> {esc(last_error)}\n\n"
-        "Похоже на временные проблемы на стороне провайдера. "
-        "Сообщу, когда доступность восстановится."
-    )
+    provider, error_safe = esc(provider_label), esc(last_error)
+    duration_render = _render_duration(duration_seconds)
+
+    def render(language: str) -> str:
+        """Render the provider-outage message in one recipient language.
+
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized provider-outage notification body.
+        """
+        checks = translate_plural("plural.checks_in_row", failures, language)
+        return (
+            translate("notif.provider_outage.title", language, provider=provider)
+            + "\n\n"
+            + translate(
+                "notif.provider_outage.body",
+                language,
+                duration=duration_render(language),
+                checks=checks,
+            )
+            + "\n\n"
+            + translate("notif.provider_outage.last_error", language, error=error_safe)
+            + "\n\n"
+            + translate("notif.provider_outage.footer", language)
+        )
 
     await _broadcast_to_admins(
-        bot, admin_ids, message, log_label=f"provider outage notification for {provider_label}"
+        bot, admin_ids, render, log_label=f"provider outage notification for {provider_label}"
     )
 
 
@@ -258,7 +429,7 @@ async def send_provider_recovered_notification(
     bot: Bot,
     admin_ids: list[int],
     provider_label: str,
-    duration_text: str,
+    duration_seconds: int,
 ) -> None:
     """
     Send a notification that a provider's availability has recovered.
@@ -272,15 +443,33 @@ async def send_provider_recovered_notification(
         bot: Bot instance
         admin_ids: List of administrator IDs
         provider_label: Human-readable provider name (display_name)
-        duration_text: Outage duration (for example, "~1.5 h")
+        duration_seconds: Outage duration in seconds (localized per recipient)
+
+    Returns:
+        None.
     """
-    message = (
-        f"✅ <b>Провайдер восстановлен: {esc(provider_label)}</b>\n\n"
-        f"Снова доступен. Был недоступен {esc(duration_text)}."
-    )
+    provider = esc(provider_label)
+    duration_render = _render_duration(duration_seconds)
+
+    def render(language: str) -> str:
+        """Render the provider-recovered message in one recipient language.
+
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized provider-recovered notification body.
+        """
+        return (
+            translate("notif.provider_recovered.title", language, provider=provider)
+            + "\n\n"
+            + translate(
+                "notif.provider_recovered.body", language, duration=duration_render(language)
+            )
+        )
 
     await _broadcast_to_admins(
-        bot, admin_ids, message, log_label=f"provider recovered notification for {provider_label}"
+        bot, admin_ids, render, log_label=f"provider recovered notification for {provider_label}"
     )
 
 
@@ -304,19 +493,33 @@ async def send_server_added_notification(
         server_ip: Server IP address
         provider_name: Provider name (vultr, hetzner, etc.)
         region: Server region (optional)
+
+    Returns:
+        None.
     """
-    message = (
-        "🟢 <b>Новый сервер обнаружен</b>\n\n"
-        f"Обнаружен новый сервер <b>{esc(server_name)}</b> ({esc(server_ip)}) "
-        f"у провайдера <b>{esc(provider_name.upper())}</b>.\n"
-    )
+    name, ip, provider = esc(server_name), esc(server_ip), esc(provider_name.upper())
+    region_safe = esc(region) if region else None
 
-    if region:
-        message += f"\n<b>Регион:</b> {esc(region)}"
+    def render(language: str) -> str:
+        """Render the server-added message in one recipient language.
 
-    message += "\n\n✅ Мониторинг запущен автоматически."
+        Args:
+            language: Target language code for the recipient.
 
-    await _broadcast_to_admins(bot, admin_ids, message, log_label="server added notification")
+        Returns:
+            str: Localized server-added notification body.
+        """
+        message = (
+            translate("notif.server_added.title", language)
+            + "\n\n"
+            + translate("notif.server_added.body", language, name=name, ip=ip, provider=provider)
+        )
+        if region_safe is not None:
+            message += "\n\n" + translate("notif.server_added.region", language, region=region_safe)
+        message += "\n\n" + translate("notif.server_added.monitoring_started", language)
+        return message
+
+    await _broadcast_to_admins(bot, admin_ids, render, log_label="server added notification")
 
 
 async def send_server_removed_notification(
@@ -333,13 +536,25 @@ async def send_server_removed_notification(
         server_name: Server name
         server_ip: Server IP address
         provider_name: Provider name (vultr, hetzner, etc.)
-    """
-    message = (
-        "🔴 <b>Сервер удален</b>\n\n"
-        f"Сервер <b>{esc(server_name)}</b> ({esc(server_ip)}) больше не существует "
-        f"у провайдера <b>{esc(provider_name.upper())}</b>.\n\n"
-        "⛔ Мониторинг остановлен.\n"
-        "🗑️ Статистика удалена."
-    )
 
-    await _broadcast_to_admins(bot, admin_ids, message, log_label="server removed notification")
+    Returns:
+        None.
+    """
+    name, ip, provider = esc(server_name), esc(server_ip), esc(provider_name.upper())
+
+    def render(language: str) -> str:
+        """Render the server-removed message in one recipient language.
+
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized server-removed notification body.
+        """
+        return (
+            translate("notif.server_removed.title", language)
+            + "\n\n"
+            + translate("notif.server_removed.body", language, name=name, ip=ip, provider=provider)
+        )
+
+    await _broadcast_to_admins(bot, admin_ids, render, log_label="server removed notification")

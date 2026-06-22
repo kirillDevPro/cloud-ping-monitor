@@ -16,6 +16,7 @@ from aiogram import Bot
 from ..models import PingResult
 from ..storage import ServersRepository, SqliteStatisticsRepository
 from ..bot.notifications import (
+    render_message,
     send_critical_error_notification,
     send_server_down_notification,
     send_server_up_notification,
@@ -82,6 +83,9 @@ def _record_notification_sent(server_key: str, direction: str) -> None:
     Args:
         server_key: Composite key of the server.
         direction: "down" or "up"; stored independently for per-direction cooldowns.
+
+    Returns:
+        None.
     """
     _last_notification_time[(server_key, direction)] = time.time()
 
@@ -95,6 +99,9 @@ def forget_server(server_key: str) -> None:
 
     Args:
         server_key: Composite key of the removed server.
+
+    Returns:
+        None.
     """
     _last_notified_status.pop(server_key, None)
     _last_notification_time.pop((server_key, "down"), None)
@@ -110,6 +117,9 @@ def _append_to_batch_locked(result: PingResult, server_key: str) -> None:
     Args:
         result: Ping result to enqueue for a later database flush.
         server_key: Composite key used to group results by server.
+
+    Returns:
+        None.
     """
     global _batch_size
     ping_batch_storage[server_key].append(result)
@@ -121,6 +131,9 @@ def _clear_batch_locked() -> None:
     Drop all accumulated results and reset the running size counter to zero.
 
     IMPORTANT: the caller MUST hold `_batch_storage_lock` (asyncio.Lock is non-reentrant).
+
+    Returns:
+        None.
     """
     global _batch_size
     ping_batch_storage.clear()
@@ -169,6 +182,9 @@ async def _periodic_batch_flush(
         admin_ids: Administrator IDs to notify (optional)
         interval: Check interval in seconds (default 30)
 
+    Returns:
+        None.
+
     Raises:
         asyncio.CancelledError: Re-raised when the task is cancelled.
     """
@@ -207,6 +223,9 @@ async def ping_results_processor(
         stats_repo: SQLite statistics repository
         heartbeat: Called once per loop iteration so the supervisor can detect a stall
             (the task alive but wedged). Defaults to a no-op for standalone use/tests.
+
+    Returns:
+        None.
 
     Raises:
         asyncio.CancelledError: Re-raised after shutdown flush and cleanup.
@@ -379,6 +398,9 @@ async def _check_and_flush_batch(
         stats_repo: SQLite statistics repository
         bot: Bot used to alert admins on a persistent DB-write failure (optional)
         admin_ids: Administrator IDs to notify (optional)
+
+    Returns:
+        None.
     """
     # Atomically check the conditions AND drain the batch under one lock
     async with _batch_storage_lock:
@@ -417,6 +439,9 @@ async def _flush_batch(
         stats_repo: SQLite statistics repository
         bot: Bot used to alert admins on a persistent DB-write failure (optional)
         admin_ids: Administrator IDs to notify (optional)
+
+    Returns:
+        None.
     """
     # Drain the batch under the lock
     async with _batch_storage_lock:
@@ -440,6 +465,9 @@ async def _alert_db_failure(bot: Bot, admin_ids: list[int], dropped: int) -> Non
         bot: Bot used to deliver the alert.
         admin_ids: Administrator IDs to notify.
         dropped: Number of statistics records discarded by the emergency clear.
+
+    Returns:
+        None.
     """
     global _last_db_alert_time
     now = time.time()
@@ -449,12 +477,8 @@ async def _alert_db_failure(bot: Bot, admin_ids: list[int], dropped: int) -> Non
         delivered = await send_critical_error_notification(
             bot=bot,
             admin_ids=admin_ids,
-            error_type="Ошибка записи статистики",
-            error_message=(
-                f"Запись статистики пинга в базу не удаётся (повторяющиеся ошибки). "
-                f"Отброшено ~{dropped} записей, чтобы не переполнить память. Мониторинг и "
-                f"уведомления работают, статистика теряется. Проверьте место на диске и БД."
-            ),
+            title_key="alert.db_failure.title",
+            body=render_message("alert.db_failure.body", dropped=dropped),
         )
     except Exception as e:
         logger.error(f"Failed to send DB-failure alert: {e}", exc_info=True)
@@ -483,6 +507,9 @@ async def _write_batch_to_db(
         all_results: List of results to write
         bot: Bot used to alert admins on the emergency drop (optional)
         admin_ids: Administrator IDs to notify (optional)
+
+    Returns:
+        None.
     """
     global last_flush_time
 

@@ -90,6 +90,9 @@ class ApplicationContainer:
         2. Providers (HTTP sessions)
         3. Bot (Telegram session)
         4. Statistics DB connection (SQLite)
+
+        Returns:
+            None.
         """
         logger.info("Container shutdown started...")
 
@@ -169,6 +172,13 @@ class ContainerBuilder:
 
         init_callback_cache(settings.DATA_DIR)
 
+        # Point the per-user language store at the configured data dir and load it,
+        # so language preferences live next to the other data files and are available
+        # to the language middleware and per-recipient notification rendering.
+        from .bot.i18n import init_language_store
+
+        init_language_store(settings.DATA_DIR)
+
         # 2. Providers
         logger.debug("Initializing providers...")
         provider_manager = ProviderManager()
@@ -219,6 +229,9 @@ class ContainerBuilder:
         Args:
             settings: Application configuration.
             manager: Provider manager to register providers into.
+
+        Returns:
+            None.
         """
         from .models.provider import ProviderType
         from .providers import ProviderFactory

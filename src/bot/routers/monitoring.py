@@ -10,6 +10,8 @@ from ...models import Server
 from ...storage import ServersRepository, SqliteStatisticsRepository
 from ...storage.balance import BalanceRepository
 from ...providers.manager import ProviderManager
+from ..filters import MainMenuButton
+from ..i18n import _
 from ..keyboards import (
     get_monitoring_keyboard,
     get_server_details_keyboard,
@@ -53,19 +55,19 @@ async def _resolve_server(
     """
     server_key = decode_callback_data(callback.data, prefix)
     if not server_key or ":" not in server_key:
-        await callback.answer("❌ Некорректный формат данных")
+        await callback.answer(_("common.invalid_data_format"))
         logger.error(f"Invalid callback_data: {callback.data}")
         return None
 
     server = servers_repo.get_by_composite_key(server_key)
     if not server:
-        await callback.answer("❌ Сервер не найден")
+        await callback.answer(_("common.server_not_found"))
         return None
 
     return server
 
 
-@monitoring_router.message(F.text == "📊 Мониторинг")
+@monitoring_router.message(MainMenuButton("menu.monitoring"))
 async def cmd_monitoring(
     message: Message,
     servers_repo: ServersRepository,
@@ -132,7 +134,7 @@ async def callback_monitor_page(
     try:
         page = int(callback.data.split("_")[-1])
     except (ValueError, IndexError):
-        await callback.answer("❌ Ошибка при переходе на страницу")
+        await callback.answer(_("common.page_change_error"))
         return
 
     # Fetch all servers
@@ -183,7 +185,7 @@ async def callback_monitor_refresh(
     # Safely update the message
     await safe_edit_message(callback, text, get_monitoring_keyboard(servers, page=page))
 
-    await callback.answer("✅ Обновлено")
+    await callback.answer(_("common.refreshed"))
 
 
 @monitoring_router.callback_query(F.data.startswith("monitor_details_"))

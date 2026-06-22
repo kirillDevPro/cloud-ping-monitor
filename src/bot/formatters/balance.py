@@ -8,6 +8,7 @@ from ...storage.balance import (
     PrepaidBalanceRecord,
 )
 from ...providers.manager import ProviderManager
+from ..i18n import _, plural
 from .common import format_days_as_period, esc
 
 
@@ -83,13 +84,13 @@ def format_balance_main(provider_balances: dict) -> str:
         provider_balances: Dict with provider balances
 
     Returns:
-        str: Formatted message
+        str: Formatted message in the active language
     """
-    text = "💰 <b>Баланс облачных провайдеров</b>\n"
+    text = _("bal.main_title") + "\n"
 
     if not provider_balances:
-        text += "\n❌ <i>Нет доступных провайдеров</i>\n\n"
-        text += "💡 Добавьте API ключи в файл .env"
+        text += "\n" + _("bal.no_providers") + "\n\n"
+        text += _("bal.add_api_keys")
         return text
 
     # Group providers by category
@@ -123,25 +124,25 @@ def format_balance_main(provider_balances: dict) -> str:
 
     # Section 1: Available funds
     if available_balances or postpaid_providers:
-        text += "\n📊 <b>Доступные средства:</b>\n"
+        text += "\n" + _("bal.available_funds") + "\n"
         for emoji, name, balance in available_balances:
             text += f"{emoji} {esc(name)}: <b>${balance:,.2f}</b>\n"
         for emoji, name in postpaid_providers:
-            text += f"{emoji} {esc(name)}: — <i>(постоплата)</i>\n"
+            text += f"{emoji} {esc(name)}: — <i>{_('bal.postpaid_suffix')}</i>\n"
 
     # Section 2: Charges for the current month
     if monthly_expenses:
-        text += "\n📉 <b>Расходы за текущий месяц:</b>\n"
+        text += "\n" + _("bal.monthly_expenses") + "\n"
         for emoji, name, amount in monthly_expenses:
             text += f"{emoji} {esc(name)}: ${amount:,.2f}\n"
 
     # Section 3: Unavailable providers
     if unavailable:
-        text += "\n⚠️ <b>Недоступно:</b>\n"
+        text += "\n" + _("bal.unavailable") + "\n"
         for emoji, name in unavailable:
-            text += f"{emoji} {esc(name)} <i>(нет API)</i>\n"
+            text += f"{emoji} {esc(name)} <i>{_('bal.no_api_suffix')}</i>\n"
 
-    text += "\n💡 Выберите провайдер для детального просмотра"
+    text += "\n" + _("bal.choose_provider")
 
     return text
 
@@ -162,17 +163,25 @@ def format_balance_history(
         provider_filter: Filter by provider (alias), or None for all
 
     Returns:
-        str: Formatted message
+        str: Formatted message in the active language
     """
     if provider_filter:
         emoji = provider_emojis.get(provider_filter, "☁️")
-        text = f"📊 <b>История баланса {emoji} {esc(provider_filter)} ({period} дней)</b>\n\n"
+        text = (
+            _(
+                "bal.history_title_provider",
+                emoji=emoji,
+                provider=esc(provider_filter),
+                period=period,
+            )
+            + "\n\n"
+        )
     else:
-        text = f"📊 <b>История баланса ({period} дней)</b>\n\n"
+        text = _("bal.history_title_all", period=period) + "\n\n"
 
     if not records:
-        text += "❌ <i>Данных за этот период недостаточно</i>\n\n"
-        text += "💡 Подождите несколько дней для накопления статистики."
+        text += _("bal.history_insufficient") + "\n\n"
+        text += _("bal.history_wait")
         return text
 
     # Group records by date (last 10)
@@ -191,12 +200,12 @@ def format_balance_history(
         text += f"{emoji} {esc(record_alias)}: {record.format_summary()}\n\n"
 
     if len(sorted_records) > 10:
-        text += f"<i>... и ещё {len(sorted_records) - 10} записей</i>\n\n"
+        text += plural("bal.history_more", len(sorted_records) - 10) + "\n\n"
 
     if provider_filter:
-        text += f"💡 История показывает данные только для {esc(provider_filter)}"
+        text += _("bal.history_only_provider", provider=esc(provider_filter))
     else:
-        text += "💡 История показывает данные по всем провайдерам"
+        text += _("bal.history_all_providers")
 
     return text
 
@@ -209,27 +218,43 @@ def format_balance_settings(settings: Settings) -> str:
         settings: Application settings
 
     Returns:
-        str: Formatted message
+        str: Formatted message in the active language
     """
-    text = "⚙️ <b>Настройки баланса</b>\n\n"
+    text = _("bal.settings_title") + "\n\n"
 
     # Notification threshold
-    text += f"💵 <b>Порог уведомления:</b> ${settings.BALANCE_THRESHOLD:.2f}\n"
-    text += "   <i>При падении ниже этого значения будет отправлено уведомление</i>\n\n"
+    text += _("bal.settings_threshold", value=settings.BALANCE_THRESHOLD) + "\n"
+    text += _("bal.settings_threshold_hint") + "\n\n"
 
     # Check interval
     interval_hours = settings.BALANCE_CHECK_INTERVAL / 3600
-    text += f"⏱️ <b>Интервал проверки:</b> {interval_hours:.1f} часов\n"
-    text += "   <i>Частота автоматической проверки баланса</i>\n\n"
+    text += _("bal.settings_interval", hours=interval_hours) + "\n"
+    text += _("bal.settings_interval_hint") + "\n\n"
 
     # Hint
-    text += "💡 <b>Как изменить:</b>\n"
-    text += "Настройки задаются в файле <code>.env</code>:\n"
+    text += _("bal.settings_how_to") + "\n"
+    text += _("bal.settings_env_line") + "\n"
     text += f"   • <code>BALANCE_THRESHOLD={settings.BALANCE_THRESHOLD}</code>\n"
     text += f"   • <code>BALANCE_CHECK_INTERVAL={settings.BALANCE_CHECK_INTERVAL}</code>\n\n"
-    text += "<i>После изменения необходим перезапуск бота</i>"
+    text += _("bal.settings_restart")
 
     return text
+
+
+# Balance-trend value -> (emoji, catalog key). The dict keys are code-coupled
+# (returned by the burn-rate analysis); the words are translated.
+_TREND_EMOJI: dict[str, str] = {
+    "increasing": "📈",
+    "decreasing": "📉",
+    "stable": "➡️",
+    "unknown": "❓",
+}
+_TREND_KEYS: dict[str, str] = {
+    "increasing": "trend.increasing",
+    "decreasing": "trend.decreasing",
+    "stable": "trend.stable",
+    "unknown": "trend.unknown",
+}
 
 
 def format_balance_provider_detail(
@@ -258,73 +283,64 @@ def format_balance_provider_detail(
         supports_balance: Whether the provider supports the balance API
 
     Returns:
-        str: Formatted message
+        str: Formatted message in the active language
     """
     text = f"{provider_emoji} <b>{esc(provider_name)}</b>\n\n"
 
     if not supports_balance or record is None:
-        text += "⚠️ <b>Баланс недоступен через API</b>\n\n"
-        text += f"{esc(provider_name)} не предоставляет API для\n"
-        text += "получения информации о балансе.\n\n"
-        text += "💡 Проверьте баланс вручную в панели управления провайдера."
+        text += _("bal.detail_unavailable") + "\n\n"
+        text += _("bal.detail_no_api_body", provider=esc(provider_name)) + "\n\n"
+        text += _("bal.detail_check_manually")
         return text
 
     # Use the record's billing_model property instead of checking fields
     if record.billing_model == "postpaid":
         # Postpaid provider (AWS): show the month's costs
-        text += f"💵 <b>Затраты за текущий месяц:</b> ${record.display_value:.2f}\n\n"
-        text += "💡 <i>AWS использует постоплату - счёт формируется в конце месяца</i>\n\n"
+        text += _("bal.detail_postpaid_costs", value=record.display_value) + "\n\n"
+        text += _("bal.detail_postpaid_hint") + "\n\n"
     else:
         # Prepaid provider (Vultr): show the balance with a breakdown
         # Type narrowing: record is PrepaidBalanceRecord
         if isinstance(record, PrepaidBalanceRecord):
-            text += f"💰 <b>Доступный баланс:</b> ${record.effective_balance:.2f}\n"
-            text += f"   ├─ Баланс аккаунта: ${record.balance:.2f}\n"
-            text += f"   └─ Ожидают списания: ${record.pending_charges:.2f}\n\n"
+            text += _("bal.detail_available_balance", value=record.effective_balance) + "\n"
+            text += _("bal.detail_account_balance", value=record.balance) + "\n"
+            text += _("bal.detail_pending", value=record.pending_charges) + "\n\n"
 
             # Burn statistics
             if burn_rate is not None and burn_rate > 0:
                 monthly_rate = burn_rate * 30
-                text += f"📉 <b>Средний расход:</b> ${burn_rate:.2f}/день\n"
-                text += f"   └─ ~${monthly_rate:.2f}/мес\n"
+                text += _("bal.detail_burn", value=burn_rate) + "\n"
+                text += _("bal.detail_burn_monthly", value=monthly_rate) + "\n"
             else:
-                text += "📉 <b>Средний расход:</b> недостаточно данных\n"
-                text += "   └─ <i>(мин. 2 проверки за 12 часов)</i>\n"
+                text += _("bal.detail_burn_insufficient") + "\n"
+                text += _("bal.detail_burn_insufficient_hint") + "\n"
 
             if days_left is not None:
                 if days_left > 0:
                     days_int = int(days_left)
                     period = format_days_as_period(days_int)
-                    text += f"⏳ <b>Прогноз:</b> ~{days_int} дней\n"
+                    text += plural("bal.forecast_days", days_int) + "\n"
                     if period:
-                        text += f"   └─ ~{period}\n"
+                        text += _("bal.detail_forecast_period", period=period) + "\n"
                 else:
-                    text += "⏳ <b>Прогноз:</b> баланс исчерпан\n"
+                    text += _("bal.detail_forecast_depleted") + "\n"
             else:
-                text += "⏳ <b>Прогноз:</b> —\n"
+                text += _("bal.detail_forecast_none") + "\n"
 
             # Trend
-            trend_emoji = {
-                "increasing": "📈",
-                "decreasing": "📉",
-                "stable": "➡️",
-                "unknown": "❓",
-            }
-            trend_text = {
-                "increasing": "растёт",
-                "decreasing": "падает",
-                "stable": "стабильно",
-                "unknown": "неизвестно",
-            }
-            text += f"{trend_emoji.get(trend, '❓')} <b>Тренд:</b> {trend_text.get(trend, 'неизвестно')}\n\n"
+            trend_emoji = _TREND_EMOJI.get(trend, "❓")
+            trend_word = _(_TREND_KEYS.get(trend, "trend.unknown"))
+            text += f"{trend_emoji} " + _("bal.detail_trend_label") + f" {trend_word}\n\n"
 
             # Last deposit information (prepaid only)
             if record.last_payment_date and record.last_payment_amount:
-                text += "📅 <b>Последний депозит:</b>\n"
-                text += f"   • Дата: {record.last_payment_date.strftime('%Y-%m-%d %H:%M')} UTC\n"
-                text += f"   • Сумма: ${record.last_payment_amount:.2f}\n\n"
+                text += _("bal.detail_last_deposit") + "\n"
+                deposit_date = record.last_payment_date.strftime("%Y-%m-%d %H:%M")
+                text += _("bal.detail_deposit_date", date=deposit_date) + "\n"
+                text += _("bal.detail_deposit_amount", value=record.last_payment_amount) + "\n\n"
 
     # Check time (for all models)
-    text += f"⏰ <b>Последняя проверка:</b> {record.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+    last_check = record.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    text += _("bal.detail_last_check", timestamp=last_check)
 
     return text

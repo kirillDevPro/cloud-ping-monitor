@@ -9,6 +9,7 @@ from ...models import Server, PingStatistics, PingResult
 from ...storage import SqliteStatisticsRepository
 from ...storage.balance import BalanceRepository
 from ...providers.manager import ProviderManager
+from ..i18n import _
 from .common import format_number, esc
 from .balance import collect_provider_balances
 
@@ -33,14 +34,10 @@ def format_monitoring_dashboard(
         provider_manager: Provider manager (optional).
 
     Returns:
-        Formatted dashboard text.
+        Formatted dashboard text in the active language.
     """
     if not servers:
-        return (
-            "📊 <b>Мониторинг серверов</b>\n\n"
-            "Список серверов пуст.\n"
-            "Добавьте серверы для мониторинга."
-        )
+        return _("mon.empty")
 
     # Count the server statuses
     total_servers = len(servers)
@@ -96,14 +93,14 @@ def format_monitoring_dashboard(
     avg_uptime = uptime_sum / servers_with_stats if servers_with_stats > 0 else 0.0
 
     # Build the message
-    text = "📊 <b>Общий мониторинг серверов</b>\n\n"
+    text = _("mon.dashboard_title") + "\n\n"
 
     # Section: general server information
-    text += "━━━ <b>Серверы</b> ━━━\n"
-    text += f"<b>Всего серверов:</b> {total_servers}\n"
-    text += f"🟢 Онлайн: {online_count}\n"
-    text += f"🔴 Офлайн: {offline_count}\n"
-    text += f"❓ Неизвестно: {unknown_count}\n\n"
+    text += _("mon.section_servers") + "\n"
+    text += _("mon.total_servers", count=total_servers) + "\n"
+    text += _("mon.online", count=online_count) + "\n"
+    text += _("mon.offline", count=offline_count) + "\n"
+    text += _("mon.unknown", count=unknown_count) + "\n\n"
 
     # Section: finances (if data is available)
     if balance_repo is not None and provider_manager is not None:
@@ -121,7 +118,7 @@ def format_monitoring_dashboard(
             total_balance = 0.0
             total_expenses = 0.0
 
-            for _, data in providers_with_balance:
+            for _name, data in providers_with_balance:
                 balance = data.get("balance")
                 billing_model = data.get("billing_model", "prepaid")
 
@@ -137,25 +134,25 @@ def format_monitoring_dashboard(
                     total_expenses += monthly
 
             providers_count = len(providers_with_balance)
-            text += f"━━━ <b>Финансы</b> ({providers_count} пров.) ━━━\n"
-            text += f"💰 Баланс: ${total_balance:,.2f}\n"
-            text += f"📉 Расходы/мес: ${total_expenses:,.2f}\n\n"
+            text += _("mon.section_finance", count=providers_count) + "\n"
+            text += _("mon.finance_balance", amount=total_balance) + "\n"
+            text += _("mon.finance_expenses", amount=total_expenses) + "\n\n"
 
     # Section: ping statistics for the last 24 hours
     if total_pings > 0:
-        text += "━━━ <b>Статистика за 24 часа</b> ━━━\n"
-        text += f"<b>Всего пингов:</b> {format_number(total_pings)}\n"
-        text += f"<b>Успешно:</b> {format_number(successful_pings)} 🟢\n"
-        text += f"<b>Ошибки:</b> {format_number(failed_pings)} 🔴\n"
-        text += f"<b>Timeout:</b> {format_number(timeout_pings)} ⏱️\n"
-        text += f"<b>Средний Uptime:</b> {avg_uptime:.2f}%\n\n"
+        text += _("mon.section_stats_24h") + "\n"
+        text += _("mon.total_pings", value=format_number(total_pings)) + "\n"
+        text += _("mon.successful", value=format_number(successful_pings)) + "\n"
+        text += _("mon.errors", value=format_number(failed_pings)) + "\n"
+        text += _("mon.timeout", value=format_number(timeout_pings)) + "\n"
+        text += _("mon.avg_uptime", value=avg_uptime) + "\n\n"
     else:
-        text += "━━━ <b>Статистика за 24 часа</b> ━━━\n"
-        text += "Нет данных о пингах\n\n"
+        text += _("mon.section_stats_24h") + "\n"
+        text += _("mon.no_ping_data") + "\n\n"
 
-    # Section: per-provider statistics
+    # Section: per-provider statistics (counts only — no translatable words)
     if provider_stats:
-        text += "━━━ <b>По провайдерам</b> ━━━\n"
+        text += _("mon.section_by_provider") + "\n"
         for provider, stats in sorted(provider_stats.items()):
             text += f"<b>{esc(provider)}:</b> {stats['total']} "
             text += f"(🟢 {stats['online']} | 🔴 {stats['offline']})\n"
@@ -173,14 +170,10 @@ def format_servers_list(servers: list[Server], shared_state: DictProxy, page: in
         page: Page number.
 
     Returns:
-        Formatted text with the server list.
+        Formatted text with the server list in the active language.
     """
     if not servers:
-        return (
-            "📊 <b>Мониторинг серверов</b>\n\n"
-            "Список серверов пуст.\n"
-            "Добавьте серверы для мониторинга."
-        )
+        return _("mon.empty")
 
     # Count the statuses
     online_count = 0
@@ -200,15 +193,16 @@ def format_servers_list(servers: list[Server], shared_state: DictProxy, page: in
             unknown_count += 1
 
     # Build the message
-    text = "📊 <b>Мониторинг серверов</b>\n\n"
+    text = _("mon.list_title") + "\n\n"
 
     # Overall statistics
-    text += f"<b>Всего серверов:</b> {len(servers)}\n"
-    text += f"🟢 Онлайн: {online_count} | "
-    text += f"🔴 Офлайн: {offline_count} | "
-    text += f"❓ Неизвестно: {unknown_count}\n\n"
+    text += _("mon.total_servers", count=len(servers)) + "\n"
+    text += (
+        _("mon.status_inline", online=online_count, offline=offline_count, unknown=unknown_count)
+        + "\n\n"
+    )
 
-    text += "Выберите сервер для просмотра деталей 👇"
+    text += _("mon.choose_server")
 
     return text
 
@@ -229,74 +223,75 @@ def format_server_details(
         recent_errors: Recent errors (failed/timeout pings).
 
     Returns:
-        Formatted text with the server details.
+        Formatted text with the server details in the active language.
     """
     # Resolve the status
     status = state.get("status", "unknown")
     if status == "online":
         status_emoji = "✅"
-        status_text = "ONLINE"
+        status_text = _("status.online")
     elif status == "offline":
         status_emoji = "❌"
-        status_text = "OFFLINE"
+        status_text = _("status.offline")
     else:
         status_emoji = "❓"
-        status_text = "UNKNOWN"
+        status_text = _("status.unknown")
 
     # Basic information
     text = f"🖥️ <b>{esc(server.get_display_name())}</b>\n\n"
-    text += f"<b>Статус:</b> {status_emoji} {status_text}\n"
-    text += f"<b>Провайдер:</b> {esc(server.effective_alias.upper())}\n"
-    text += f"<b>IP:</b> {esc(server.ip)}\n"
+    text += _("details.status_label") + f" {status_emoji} {status_text}\n"
+    text += _("details.provider_label") + f" {esc(server.effective_alias.upper())}\n"
+    text += _("details.ip_label") + f" {esc(server.ip)}\n"
 
     if server.region:
-        text += f"<b>Регион:</b> {esc(server.region)}\n"
+        text += _("details.region_label") + f" {esc(server.region)}\n"
     if server.plan:
-        text += f"<b>План:</b> {esc(server.plan)}\n"
+        text += _("details.plan_label") + f" {esc(server.plan)}\n"
     if server.os:
-        text += f"<b>ОС:</b> {esc(server.os)}\n"
+        text += _("details.os_label") + f" {esc(server.os)}\n"
     if server.vcpu_count and server.ram_mb:
-        text += f"<b>Ресурсы:</b> {server.vcpu_count} vCPU | {server.ram_mb} MB RAM"
+        text += _("details.resources_label") + f" {server.vcpu_count} vCPU | {server.ram_mb} MB RAM"
         if server.disk_gb:
-            text += f" | {server.disk_gb} GB Диск"
+            text += f" | {server.disk_gb} " + _("details.disk_suffix")
         text += "\n"
 
     # Last ping information
     last_check = state.get("last_ping_time")
     if last_check:
-        text += f"\n<b>Последний ping:</b> {esc(last_check)}\n"
+        text += "\n" + _("details.last_ping_label") + f" {esc(last_check)}\n"
 
     response_time = state.get("response_time_ms")
     if response_time is not None:
-        text += f"<b>Время отклика:</b> {response_time:.2f} ms\n"
+        text += _("details.response_time_label") + f" {response_time:.2f} ms\n"
 
-    text += f"<b>Мониторинг:</b> {'Включён' if server.enabled else 'Выключен'}\n"
+    monitoring_state = _("details.monitoring_on") if server.enabled else _("details.monitoring_off")
+    text += _("details.monitoring_label") + f" {monitoring_state}\n"
 
     # Statistics for the last 24 hours
     if stats_24h:
-        text += "\n📊 <b>Статистика за 24 часа</b>\n\n"
+        text += "\n" + _("details.stats_24h_header") + "\n\n"
         text += stats_24h.get_display_text()
 
     # Recent problems (errors only)
     if recent_errors:
-        text += "\n\n🔴 <b>Последние проблемы:</b>\n"
+        text += "\n\n" + _("details.recent_problems") + "\n"
         for error in recent_errors[:5]:
             # Format the elapsed time
             try:
                 time_diff = datetime.now(timezone.utc) - error.timestamp
                 if time_diff.total_seconds() < 60:
-                    time_ago = "только что"
+                    time_ago = _("time.just_now")
                 elif time_diff.total_seconds() < 3600:
                     minutes = int(time_diff.total_seconds() / 60)
-                    time_ago = f"{minutes} мин назад"
+                    time_ago = _("time.min_ago", n=minutes)
                 else:
                     hours = int(time_diff.total_seconds() / 3600)
-                    time_ago = f"{hours} ч назад"
+                    time_ago = _("time.hours_ago", n=hours)
             except Exception as e:
                 logger.warning(f"Failed to calculate time diff for error: {e}")
-                time_ago = "н/д"
+                time_ago = _("time.na")
 
-            # Format the error status
+            # Format the error status (technical enum value — not translated)
             status_text = error.status.value.upper()
             text += f"🔴 {status_text} ({time_ago})\n"
 
@@ -323,34 +318,34 @@ def format_statistics(
         stats_7d: Statistics for the last 7 days.
 
     Returns:
-        Formatted text with the statistics.
+        Formatted text with the statistics in the active language.
     """
-    text = f"📊 <b>Статистика: {esc(server.get_display_name())}</b>\n\n"
+    text = _("stats.title", name=esc(server.get_display_name())) + "\n\n"
 
     # For the last 1 hour
     if stats_1h:
-        text += "━━━ <b>За 1 час</b> ━━━\n"
+        text += _("stats.section_1h") + "\n"
         text += stats_1h.get_display_text()
         text += "\n\n"
     else:
-        text += "━━━ <b>За 1 час</b> ━━━\n"
-        text += "Нет данных\n\n"
+        text += _("stats.section_1h") + "\n"
+        text += _("common.no_data") + "\n\n"
 
     # For the last 24 hours
     if stats_24h:
-        text += "━━━ <b>За 24 часа</b> ━━━\n"
+        text += _("stats.section_24h") + "\n"
         text += stats_24h.get_display_text()
         text += "\n\n"
     else:
-        text += "━━━ <b>За 24 часа</b> ━━━\n"
-        text += "Нет данных\n\n"
+        text += _("stats.section_24h") + "\n"
+        text += _("common.no_data") + "\n\n"
 
     # For the last 7 days
     if stats_7d:
-        text += "━━━ <b>За 7 дней</b> ━━━\n"
+        text += _("stats.section_7d") + "\n"
         text += stats_7d.get_display_text()
     else:
-        text += "━━━ <b>За 7 дней</b> ━━━\n"
-        text += "Нет данных"
+        text += _("stats.section_7d") + "\n"
+        text += _("common.no_data")
 
     return text

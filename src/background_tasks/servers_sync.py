@@ -11,6 +11,7 @@ from ..storage import ServersRepository, SqliteStatisticsRepository
 from ..exceptions import is_transient_error
 from .ping_processor import forget_server
 from ..bot.notifications import (
+    render_message,
     send_server_added_notification,
     send_server_removed_notification,
     send_critical_error_notification,
@@ -25,21 +26,6 @@ logger = logging.getLogger(__name__)
 # and the administrator is notified. Persistent errors (auth/permissions) alert
 # immediately.
 OUTAGE_ALERT_THRESHOLD = 3
-
-
-def _format_outage_duration(seconds: int) -> str:
-    """Format an outage duration into a human-readable string (~X h / ~Y min).
-
-    Args:
-        seconds: Outage duration in seconds.
-
-    Returns:
-        A Russian-language duration string using the existing hour/minute abbreviations.
-    """
-    hours = seconds / 3600
-    if hours >= 1:
-        return f"~{hours:.1f} ч"
-    return f"~{max(1, seconds // 60)} мин"
 
 
 async def servers_sync_task(
@@ -79,6 +65,9 @@ async def servers_sync_task(
         sync_interval: Synchronization interval in seconds (default 1800 = 30 minutes).
         heartbeat: Called once per loop iteration so the supervisor can detect a stall.
             Defaults to a no-op for standalone use/tests.
+
+    Returns:
+        None.
 
     Raises:
         asyncio.CancelledError: Re-raised on cancellation so the task can be
@@ -147,7 +136,7 @@ async def servers_sync_task(
                                     bot=bot,
                                     admin_ids=admin_ids,
                                     provider_label=provider_label,
-                                    duration_text=_format_outage_duration(failures * sync_interval),
+                                    duration_seconds=failures * sync_interval,
                                     failures=failures,
                                     last_error=str(result),
                                 )
@@ -161,8 +150,11 @@ async def servers_sync_task(
                             await send_critical_error_notification(
                                 bot=bot,
                                 admin_ids=admin_ids,
-                                error_type=f"{provider_label} API",
-                                error_message=f"Не удалось получить список серверов: {str(result)}",
+                                title_key="alert.provider_api.title",
+                                title_kwargs={"provider": provider_label},
+                                body=render_message(
+                                    "alert.servers_fetch_failed.body", error=str(result)
+                                ),
                             )
                         continue
 
@@ -175,9 +167,7 @@ async def servers_sync_task(
                                 bot=bot,
                                 admin_ids=admin_ids,
                                 provider_label=provider_label,
-                                duration_text=_format_outage_duration(
-                                    consecutive_failures.get(alias, 0) * sync_interval
-                                ),
+                                duration_seconds=consecutive_failures.get(alias, 0) * sync_interval,
                             )
                         consecutive_failures[alias] = 0
 

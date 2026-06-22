@@ -3,6 +3,7 @@
 from typing import Any
 
 from ...models import Server, ServerStatus, PingStatistics, PingResult
+from ..i18n import _
 from .common import esc
 
 
@@ -14,14 +15,10 @@ def format_provider_selection(servers: list[Server]) -> str:
         servers: List of all servers.
 
     Returns:
-        Formatted text for the provider-selection screen.
+        Formatted text for the provider-selection screen in the active language.
     """
     if not servers:
-        return (
-            "🖥️ <b>Управление серверами</b>\n\n"
-            "Список серверов пуст.\n"
-            "Добавьте серверы для управления."
-        )
+        return _("srv.empty")
 
     # Compute overall counts
     online_count = sum(1 for s in servers if s.status == ServerStatus.ONLINE)
@@ -29,12 +26,12 @@ def format_provider_selection(servers: list[Server]) -> str:
     unknown_count = len(servers) - online_count - offline_count
 
     # Build the message
-    text = "🖥️ <b>Управление серверами</b>\n\n"
+    text = _("srv.manage_title") + "\n\n"
 
-    # Overall stats (compact format)
+    # Overall stats (compact format — no translatable words)
     text += f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}\n\n"
 
-    text += "Выберите провайдера для просмотра серверов 👇"
+    text += _("srv.choose_provider")
 
     return text
 
@@ -53,14 +50,10 @@ def format_servers_management_list(
         provider_alias: Provider alias; when provided it is shown in the header.
 
     Returns:
-        Formatted text with the list of servers.
+        Formatted text with the list of servers in the active language.
     """
     if not servers:
-        return (
-            "🖥️ <b>Управление серверами</b>\n\n"
-            "Список серверов пуст.\n"
-            "Добавьте серверы для управления."
-        )
+        return _("srv.empty")
 
     # Count statuses
     online_count = sum(1 for s in servers if s.status == ServerStatus.ONLINE)
@@ -69,14 +62,14 @@ def format_servers_management_list(
 
     # Build the header
     if provider_alias:
-        text = f"🖥️ <b>Серверы • {esc(provider_alias.upper())}</b>\n\n"
+        text = _("srv.servers_provider_title", provider=esc(provider_alias.upper())) + "\n\n"
     else:
-        text = "🖥️ <b>Управление серверами</b>\n\n"
+        text = _("srv.manage_title") + "\n\n"
 
-    # Overall stats (compact format)
+    # Overall stats (compact format — no translatable words)
     text += f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}\n\n"
 
-    text += "Выберите сервер для управления 👇"
+    text += _("srv.choose_server")
 
     return text
 
@@ -99,7 +92,7 @@ def format_server_control_details(
         recent_errors: Recent errors (failed/timeout pings).
 
     Returns:
-        Formatted text with the server details.
+        Formatted text with the server details in the active language.
     """
     # Determine the monitoring status
     monitoring_status = "unknown"
@@ -108,13 +101,13 @@ def format_server_control_details(
 
     if monitoring_status == "online":
         status_emoji = "✅"
-        status_text = "ONLINE"
+        status_text = _("status.online")
     elif monitoring_status == "offline":
         status_emoji = "❌"
-        status_text = "OFFLINE"
+        status_text = _("status.offline")
     else:
         status_emoji = "❓"
-        status_text = "UNKNOWN"
+        status_text = _("status.unknown")
 
     text = f"🖥️ <b>{esc(server.name)}</b>\n\n"
 
@@ -148,13 +141,13 @@ def format_server_control_details(
 
     # Information from the provider API (compact)
     if power_status:
-        # Pick an emoji for the status
+        # Pick an emoji and label for the status
         if power_status == "running":
             power_emoji = "✅"
-            power_text = "ON"
+            power_text = _("power.on")
         elif power_status == "stopped":
             power_emoji = "⏹️"
-            power_text = "OFF"
+            power_text = _("power.off")
         else:
             power_emoji = "⏳"
             power_text = esc(power_status.upper())
@@ -163,7 +156,7 @@ def format_server_control_details(
 
     # Statistics for the last 24 hours (if available)
     if stats_24h and stats_24h.total_pings > 0:
-        text += "\n📊 <b>Статистика за 24 часа</b>\n\n"
+        text += "\n" + _("details.stats_24h_header") + "\n\n"
         text += stats_24h.get_display_text()
 
     # Recent errors (compact: at most 3 red markers on a single line)
@@ -185,32 +178,48 @@ def format_confirmation_message(action: str, server: Server) -> str:
         server: The server.
 
     Returns:
-        Formatted confirmation text.
+        Formatted confirmation text in the active language.
     """
+    server_line = f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})\n\n"
+
     if action == "stop":
-        text = "⚠️ <b>Подтверждение остановки</b>\n\n"
-        text += "Вы действительно хотите остановить сервер:\n"
-        text += f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})\n\n"
-        text += "⚠️ <b>Внимание:</b> Сервер будет недоступен до следующего запуска.\n"
-        text += "Все запущенные процессы будут остановлены."
+        text = _("srv.confirm_stop_title") + "\n\n"
+        text += _("srv.confirm_stop_q") + "\n"
+        text += server_line
+        text += _("srv.confirm_stop_warn")
     elif action == "shutdown":
-        text = "🌙 <b>Подтверждение выключения (ACPI)</b>\n\n"
-        text += "Вы действительно хотите мягко выключить сервер:\n"
-        text += f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})\n\n"
-        text += "ℹ️ <b>Graceful shutdown:</b> ОС получит сигнал на корректное завершение.\n"
-        text += "Сервер будет недоступен до следующего запуска."
+        text = _("srv.confirm_shutdown_title") + "\n\n"
+        text += _("srv.confirm_shutdown_q") + "\n"
+        text += server_line
+        text += _("srv.confirm_shutdown_warn")
     elif action == "reboot":
-        text = "⚠️ <b>Подтверждение перезагрузки</b>\n\n"
-        text += "Вы действительно хотите перезагрузить сервер:\n"
-        text += f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})\n\n"
-        text += "⚠️ <b>Внимание:</b> Сервер будет недоступен на время перезагрузки (1-2 минуты).\n"
-        text += "Все активные подключения будут разорваны."
+        text = _("srv.confirm_reboot_title") + "\n\n"
+        text += _("srv.confirm_reboot_q") + "\n"
+        text += server_line
+        text += _("srv.confirm_reboot_warn")
     else:
-        text = "⚠️ <b>Подтверждение операции</b>\n\n"
-        text += f"Сервер: <b>{esc(server.get_display_name())}</b>\n"
-        text += f"Операция: {action}"
+        text = _("srv.confirm_generic_title") + "\n\n"
+        text += _("srv.confirm_generic_server", name=esc(server.get_display_name())) + "\n"
+        text += _("srv.confirm_generic_action", action=esc(action))
 
     return text
+
+
+# Operation -> catalog keys for the result wording. The "done" word is a past
+# participle used in the success body; the "err" word names the operation in the
+# error title. Code-coupled action keys ("start"/"stop"/...) are NOT translated.
+_ACTION_DONE_KEYS: dict[str, str] = {
+    "start": "action.start.done",
+    "stop": "action.stop.done",
+    "reboot": "action.reboot.done",
+    "shutdown": "action.shutdown.done",
+}
+_ACTION_ERR_KEYS: dict[str, str] = {
+    "start": "action.start.err",
+    "stop": "action.stop.err",
+    "reboot": "action.reboot.err",
+    "shutdown": "action.shutdown.err",
+}
 
 
 def format_operation_result(
@@ -226,28 +235,21 @@ def format_operation_result(
         error: Error text (if any).
 
     Returns:
-        Formatted result text.
+        Formatted result text in the active language.
     """
-    action_texts = {
-        "start": ("запущен", "запуска"),
-        "stop": ("остановлен", "остановки"),
-        "reboot": ("перезагружен", "перезагрузки"),
-        "shutdown": ("выключен", "выключения"),
-    }
-
-    success_text, error_text = action_texts.get(action, ("обработан", "операции"))
+    done_word = _(_ACTION_DONE_KEYS.get(action, "action.generic.done"))
+    err_word = _(_ACTION_ERR_KEYS.get(action, "action.generic.err"))
 
     if success:
-        text = "✅ <b>Операция выполнена</b>\n\n"
-        text += f"Сервер <b>{esc(server_name)}</b> {success_text}.\n\n"
-        text += "ℹ️ <i>Изменения вступят в силу через 30-60 секунд.\n"
-        text += "Используйте кнопку 'Обновить статус' для проверки.</i>"
+        text = _("srv.op_success_title") + "\n\n"
+        text += _("srv.op_success_body", name=esc(server_name), action=done_word) + "\n\n"
+        text += _("srv.op_success_hint")
     else:
-        text = f"❌ <b>Ошибка {error_text}</b>\n\n"
-        text += f"Не удалось выполнить операцию для сервера <b>{esc(server_name)}</b>.\n\n"
+        text = _("srv.op_error_title", action=err_word) + "\n\n"
+        text += _("srv.op_error_body", name=esc(server_name)) + "\n\n"
         if error:
-            text += f"<b>Детали:</b> {esc(error)}"
+            text += _("srv.op_error_details", error=esc(error))
         else:
-            text += "Попробуйте позже или обратитесь к администратору."
+            text += _("srv.op_error_retry")
 
     return text

@@ -8,6 +8,8 @@ from aiogram.types import Message, CallbackQuery
 from ...config import Settings
 from ...storage.balance import BalanceRepository
 from ...providers.manager import ProviderManager
+from ..filters import MainMenuButton
+from ..i18n import _
 from ..keyboards import (
     get_balance_main_keyboard,
     get_balance_history_keyboard,
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 balance_router = Router(name="balance")
 
 
-@balance_router.message(F.text == "💰 Баланс")
+@balance_router.message(MainMenuButton("menu.balance"))
 async def cmd_balance(
     message: Message, balance_repo: BalanceRepository, provider_manager: ProviderManager
 ) -> None:
@@ -84,7 +86,7 @@ async def callback_balance_provider(
     # Look up the provider by alias
     provider = provider_manager.get_provider(provider_alias)
     if not provider:
-        await safe_edit_message(callback, "❌ <b>Провайдер не найден</b>", None)
+        await safe_edit_message(callback, _("bal.provider_not_found"), None)
         return
 
     # Gather provider information
@@ -142,7 +144,7 @@ async def callback_balance_history(
     """
     # Validate callback_data
     if not callback.data:
-        await callback.answer("Ошибка: пустые данные")
+        await callback.answer(_("bal.error_empty_data"))
         return
 
     # Parse callback_data
@@ -152,7 +154,7 @@ async def callback_balance_history(
     # Validate: at most 2 parts (command:provider or just command)
     if len(data_parts) > 2:
         logger.warning(f"Invalid callback_data format: {callback.data}")
-        await callback.answer("Ошибка формата данных")
+        await callback.answer(_("bal.error_data_format"))
         return
 
     command = data_parts[0]
@@ -160,7 +162,7 @@ async def callback_balance_history(
     # Validate command - must start with balance_history
     if not command.startswith("balance_history"):
         logger.warning(f"Invalid command in callback_data: {command}")
-        await callback.answer("Ошибка: неизвестная команда")
+        await callback.answer(_("bal.error_unknown_command"))
         return
 
     # Extract provider_filter with validation

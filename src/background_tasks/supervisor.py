@@ -20,7 +20,9 @@ from typing import Any, Callable
 
 from aiogram import Bot
 
-from ..bot.notifications import send_critical_error_notification
+from ..bot.formatters.common import esc
+from ..bot.i18n import translate
+from ..bot.notifications import render_message, send_critical_error_notification
 from .heartbeat import HeartbeatRegistry
 
 logger = logging.getLogger(__name__)
@@ -58,32 +60,43 @@ async def _alert_task_event(
         name: Name of the affected background task.
         exc: The exception the task raised, or None if it returned cleanly.
         gave_up: True if the restart budget is exhausted and the task is abandoned.
+
+    Returns:
+        None.
     """
     # "exc is None" means the coroutine RETURNED (a forever-running task exiting cleanly
-    # is itself unexpected); a non-None exc means it raised.
-    if gave_up:
-        message = (
-            f"Фоновая задача «{name}» неоднократно неожиданно завершалась "
-            f"({MAX_TASK_RESTARTS} перезапусков подряд) и больше НЕ перезапускается. "
-            f"Требуется вмешательство — перезапустите бота."
-        )
-    elif exc is None:
-        message = (
-            f"Фоновая задача «{name}» неожиданно завершилась без ошибки "
-            f"(она должна работать постоянно) и была перезапущена."
-        )
-    else:
-        message = f"Фоновая задача «{name}» аварийно завершилась и была перезапущена."
+    # is itself unexpected); a non-None exc means it raised. The body is rendered per
+    # recipient: it branches on the event kind and appends the error detail when present.
+    safe_name = esc(name)
 
-    if exc is not None:
-        message += f"\n\nОшибка: {exc}"
+    def body(language: str) -> str:
+        """Render the task-event alert body in one recipient language.
+
+        Args:
+            language: Target language code for the recipient.
+
+        Returns:
+            str: Localized alert body for the task event.
+        """
+        if gave_up:
+            message = translate(
+                "alert.task_gaveup.body", language, name=safe_name, restarts=MAX_TASK_RESTARTS
+            )
+        elif exc is None:
+            message = translate("alert.task_exited.body", language, name=safe_name)
+        else:
+            message = translate("alert.task_crashed.body", language, name=safe_name)
+        if exc is not None:
+            message += "\n\n" + translate("alert.task_error_label", language, error=esc(str(exc)))
+        return message
 
     try:
         await send_critical_error_notification(
             bot=bot,
             admin_ids=admin_ids,
-            error_type=f"Фоновая задача: {name}",
-            error_message=message,
+            title_key="alert.task_event.type",
+            title_kwargs={"name": name},
+            body=body,
         )
     except Exception as e:
         logger.error(f"Failed to alert admins about task '{name}': {e}", exc_info=True)
@@ -110,12 +123,9 @@ async def _alert_task_stalled(bot: Bot, admin_ids: list[int], name: str, age: fl
         return await send_critical_error_notification(
             bot=bot,
             admin_ids=admin_ids,
-            error_type=f"Фоновая задача зависла: {name}",
-            error_message=(
-                f"Фоновая задача «{name}» не подаёт признаков прогресса уже ~{minutes} мин "
-                f"(она запущена, но, похоже, зависла). Автоперезапуск зависшей задачи "
-                f"ненадёжен — вероятно, потребуется перезапуск бота. Проверьте логи."
-            ),
+            title_key="alert.task_stalled.title",
+            title_kwargs={"name": name},
+            body=render_message("alert.task_stalled.body", name=name, minutes=minutes),
         )
     except Exception as e:
         logger.error(f"Failed to alert admins about stalled task '{name}': {e}", exc_info=True)
@@ -156,6 +166,9 @@ async def _scan_once(
             alert is retried each scan until delivered, then suppressed for the episode).
         bot: Bot for admin alerts.
         admin_ids: Administrator IDs to notify.
+
+    Returns:
+        None.
     """
     now = time.monotonic()
     for name, task in list(tasks.items()):
@@ -286,6 +299,9 @@ async def supervise_background_tasks(
 
     Raises:
         asyncio.CancelledError: Re-raised on cancellation (graceful shutdown).
+
+    Returns:
+        None.
     """
     restart_counts: dict[str, int] = {name: 0 for name in factories}
     given_up: set[str] = set()

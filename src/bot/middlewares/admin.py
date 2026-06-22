@@ -8,6 +8,8 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery, TelegramObject
 from aiogram.exceptions import TelegramAPIError
 
+from ..i18n import get_user_language, translate
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +27,9 @@ class AdminCheckMiddleware(BaseMiddleware):
 
         Args:
             admin_ids: List of allowed administrator user IDs.
+
+        Returns:
+            None.
         """
         self.admin_ids = admin_ids
         super().__init__()
@@ -72,15 +77,18 @@ class AdminCheckMiddleware(BaseMiddleware):
                     f"first_name={user.first_name or 'N/A'}"
                 )
 
-                # Safely send the access-denied message
+                # Safely send the access-denied message. This middleware runs
+                # BEFORE LanguageMiddleware (which only resolves admins), so the
+                # context-var language is not reliably set here; resolve the
+                # sender's language explicitly (defaults to English when unset).
+                denied_lang = get_user_language(user.id)
                 try:
                     if isinstance(event, Message):
-                        await event.answer(
-                            "⛔️ <b>Доступ запрещён</b>\n\n"
-                            "Этот бот доступен только администраторам."
-                        )
+                        await event.answer(translate("admin.denied_message", denied_lang))
                     elif isinstance(event, CallbackQuery):
-                        await event.answer("⛔️ Доступ запрещён", show_alert=True)
+                        await event.answer(
+                            translate("admin.denied_short", denied_lang), show_alert=True
+                        )
                 except TelegramAPIError as e:
                     logger.error(f"Failed to send unauthorized access message: {e}")
 

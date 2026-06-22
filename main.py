@@ -113,20 +113,12 @@ async def sync_servers_on_startup(app: ApplicationContainer) -> dict | None:
     else:
         logger.warning("No servers fetched from any provider")
 
-    # Return error information if all providers are unavailable
+    # Return error information if all providers are unavailable. The admin alert
+    # text is localized per recipient at the send site (i18n), so only the failed
+    # provider list is returned here.
     if failed_providers and not successful_providers:
         logger.critical(f"All providers unavailable: {', '.join(failed_providers)}")
-        return {
-            "failed_providers": ", ".join(failed_providers),
-            "message": (
-                f"Все облачные провайдеры недоступны!\n\n"
-                f"Провайдеры: {', '.join(failed_providers)}\n\n"
-                f"Проверьте:\n"
-                f"- API ключи в .env файле\n"
-                f"- Подключение к интернету\n"
-                f"- Статус API провайдеров"
-            ),
-        }
+        return {"failed_providers": ", ".join(failed_providers)}
 
     return None
 
@@ -164,6 +156,9 @@ async def start_background_tasks(
             name: Stable supervised-task name.
             factory: Zero-argument coroutine factory used now and by the supervisor.
             critical: If True, cancel already-started tasks and re-raise startup errors.
+
+        Returns:
+            None.
 
         Raises:
             Exception: Re-raised from asyncio.create_task(factory()) for critical tasks.
@@ -286,6 +281,9 @@ async def stop_background_tasks(tasks: dict[str, asyncio.Task]) -> None:
 
     Args:
         tasks: Dictionary of live (or already-finished) tasks keyed by name.
+
+    Returns:
+        None.
     """
     for name, task in tasks.items():
         task.cancel()
@@ -309,6 +307,9 @@ async def main() -> None:
     Raises:
         SystemExit: Exits with status 1 when settings, container construction, or
             critical background-task startup fails.
+
+    Returns:
+        None.
     """
     global container
 
@@ -355,25 +356,51 @@ async def main() -> None:
         logger.error(f"Failed to start worker processes: {e}", exc_info=True)
         # Keep running; workers can be started later
 
-    # 6. Register bot commands
+    # 6. Register bot commands, localized per Telegram client language.
+    #    The default (English) scope covers every client locale without a specific
+    #    set; Russian- and Ukrainian-locale clients additionally get their own
+    #    descriptions. (The /start reply itself uses each user's stored language,
+    #    independent of this client-language command menu.)
     try:
-        await container.bot.set_my_commands([
-            BotCommand(command="start", description="Запустить бота"),
-        ])
+        from src.bot.i18n import DEFAULT_LANGUAGE, translate
+
+        def _commands_for(language: str) -> list[BotCommand]:
+            """Build bot-command descriptions for one Telegram client language.
+
+            Args:
+                language: Language code passed to the explicit translator.
+
+            Returns:
+                list[BotCommand]: Commands with descriptions localized for that
+                    Telegram client language scope.
+            """
+            return [
+                BotCommand(command="start", description=translate("cmd.start_desc", language)),
+                BotCommand(
+                    command="language", description=translate("cmd.language_desc", language)
+                ),
+            ]
+
+        await container.bot.set_my_commands(_commands_for(DEFAULT_LANGUAGE))
+        await container.bot.set_my_commands(_commands_for("ru"), language_code="ru")
+        await container.bot.set_my_commands(_commands_for("uk"), language_code="uk")
         logger.info("Bot commands registered")
     except Exception as e:
         logger.error(f"Failed to register bot commands: {e}", exc_info=True)
 
     # 7. Send a critical notification if all providers are unavailable
     if providers_unavailable_error:
-        from src.bot.notifications import send_critical_error_notification
+        from src.bot.notifications import render_message, send_critical_error_notification
 
         try:
             await send_critical_error_notification(
                 bot=container.bot,
                 admin_ids=container.admin_ids,
-                error_type="Providers Unavailable",
-                error_message=providers_unavailable_error["message"],
+                title_key="alert.providers_unavailable.title",
+                body=render_message(
+                    "alert.providers_unavailable.body",
+                    providers=providers_unavailable_error["failed_providers"],
+                ),
             )
         except Exception as e:
             logger.error(f"Failed to send critical notification: {e}")

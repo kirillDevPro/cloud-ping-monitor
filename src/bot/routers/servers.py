@@ -13,6 +13,8 @@ from ...models import Server
 from ...providers.base import BaseProvider
 from ...storage import ServersRepository, SqliteStatisticsRepository
 from ...providers.manager import ProviderManager
+from ..filters import MainMenuButton
+from ..i18n import _, plural
 from ..keyboards import (
     get_servers_management_keyboard,
     get_server_control_keyboard,
@@ -149,12 +151,12 @@ async def _resolve_server(
     """
     server_key = parse_server_key(callback.data, prefix)
     if not server_key:
-        await callback.answer("❌ Некорректный формат данных")
+        await callback.answer(_("common.invalid_data_format"))
         return None
 
     server = servers_repo.get_by_composite_key(server_key)
     if not server:
-        await callback.answer("❌ Сервер не найден")
+        await callback.answer(_("common.server_not_found"))
         return None
 
     return server
@@ -225,7 +227,7 @@ async def _acquire_cooldown_and_provider(
     can_execute, remaining = try_acquire_cooldown(server.composite_key)
     if not can_execute:
         await callback.answer(
-            f"⚠️ Подождите ещё {remaining} секунд перед следующей операцией",
+            plural("srv.cooldown_wait", remaining),
             show_alert=True,
         )
         return None
@@ -234,7 +236,9 @@ async def _acquire_cooldown_and_provider(
     if not provider:
         # Reset the cooldown since the operation did not run
         clear_operation_cooldown(server.composite_key)
-        await callback.answer(f"❌ Провайдер {server.effective_alias} недоступен", show_alert=True)
+        await callback.answer(
+            _("srv.provider_unavailable", provider=server.effective_alias), show_alert=True
+        )
         return None
 
     return provider
@@ -401,7 +405,7 @@ async def _render_servers_list(
     await callback.answer(answer_text)
 
 
-@servers_router.message(F.text == "🖥️ Серверы")
+@servers_router.message(MainMenuButton("menu.servers"))
 async def cmd_servers(
     message: Message, servers_repo: ServersRepository, shared_state: DictProxy
 ) -> None:
@@ -459,7 +463,9 @@ async def callback_provider_select(
     servers = [s for s in all_servers if s.effective_alias == provider_alias]
 
     if not servers:
-        await callback.answer(f"❌ Серверы для {provider_alias} не найдены", show_alert=True)
+        await callback.answer(
+            _("srv.no_servers_for_provider", provider=provider_alias), show_alert=True
+        )
         return
 
     apply_shared_status(servers, shared_state)
@@ -499,7 +505,7 @@ async def callback_servers_page(
 
     provider_alias, page = _parse_alias_and_page(callback.data, "servers_page_")
     if page is None:
-        await callback.answer("❌ Ошибка при переходе на страницу")
+        await callback.answer(_("common.page_change_error"))
         return
 
     await _render_servers_list(callback, servers_repo, shared_state, provider_alias, page, "")
@@ -530,7 +536,7 @@ async def callback_servers_refresh(
         provider_alias, page = None, 0
 
     await _render_servers_list(
-        callback, servers_repo, shared_state, provider_alias, page, "✅ Обновлено"
+        callback, servers_repo, shared_state, provider_alias, page, _("common.refreshed")
     )
 
 
@@ -563,7 +569,7 @@ async def callback_server_control(
         return
 
     # Show the loading indicator
-    await callback.answer("⏳ Получаю данные...")
+    await callback.answer(_("srv.loading_data"))
 
     # Fetch current info from the provider
     power_status = await _fetch_power_status(provider_manager, server)
@@ -615,7 +621,7 @@ async def callback_server_start(
         return
 
     await _execute_power_action(
-        callback, server, provider, "start", loading_text="⏳ Запускаю сервер..."
+        callback, server, provider, "start", loading_text=_("srv.starting")
     )
 
 
@@ -715,7 +721,7 @@ async def callback_server_confirm(
     # callback_data: server_confirm_{action}_{alias}:{server_id} or ..._#{hash}
     action, prefix = _parse_confirm_action(callback.data, "server_confirm_")
     if not action or not prefix:
-        await callback.answer("❌ Неизвестная операция")
+        await callback.answer(_("common.unknown_operation"))
         return
 
     server = await _resolve_server(callback, servers_repo, prefix)
@@ -729,11 +735,11 @@ async def callback_server_confirm(
         return
 
     loading_texts = {
-        "stop": "⏳ Останавливаю сервер...",
-        "reboot": "⏳ Перезагружаю сервер...",
-        "shutdown": "⏳ Выключаю сервер (ACPI)...",
+        "stop": _("srv.stopping"),
+        "reboot": _("srv.rebooting"),
+        "shutdown": _("srv.shutting_down"),
     }
-    loading_text = loading_texts.get(action, "⏳ Выполняю операцию...")
+    loading_text = loading_texts.get(action, _("srv.performing_operation"))
     await _execute_power_action(
         callback, server, provider, action, loading_text=loading_text
     )
@@ -761,14 +767,14 @@ async def callback_server_cancel(
     # callback_data: server_cancel_{action}_{alias}:{server_id} or ..._#{hash}
     _action, prefix = _parse_confirm_action(callback.data, "server_cancel_")
     if not prefix:
-        await callback.answer("❌ Неизвестная операция")
+        await callback.answer(_("common.unknown_operation"))
         return
 
     server = await _resolve_server(callback, servers_repo, prefix)
     if not server:
         return
 
-    await callback.answer("❌ Операция отменена")
+    await callback.answer(_("srv.operation_cancelled"))
 
     # Fetch info from the provider API
     power_status = await _fetch_power_status(provider_manager, server)
@@ -808,7 +814,7 @@ async def callback_server_refresh(
         return
 
     # Show the loading indicator
-    await callback.answer("⏳ Обновляю данные...")
+    await callback.answer(_("srv.refreshing_data"))
 
     # Fetch current info from the provider API
     power_status = await _fetch_power_status(provider_manager, server)

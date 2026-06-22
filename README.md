@@ -1,8 +1,31 @@
-# cloud-ping-monitor
+<p align="center">
+  <img src="assets/logo.png" alt="cloud-ping-monitor" width="180" height="180">
+</p>
 
-[![CI](https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<h1 align="center">cloud-ping-monitor</h1>
+
+<p align="center">
+  <b>24/7 cloud-server uptime monitoring from Telegram — Vultr · Hetzner · AWS</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml"><img src="https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12-blue.svg" alt="Python 3.12"></a>
+  <a href="https://docs.aiogram.dev/"><img src="https://img.shields.io/badge/aiogram-3.x-2CA5E0?logo=telegram&logoColor=white" alt="aiogram 3.x"></a>
+  <img src="https://img.shields.io/badge/i18n-EN%20%7C%20RU%20%7C%20UK-success" alt="i18n: EN | RU | UK">
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+  <a href="https://github.com/kirillDevPro/cloud-ping-monitor/stargazers"><img src="https://img.shields.io/github/stars/kirillDevPro/cloud-ping-monitor?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#supported-providers">Providers</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#running">Running</a> ·
+  <a href="#development">Development</a>
+</p>
 
 A Telegram bot for monitoring cloud-server availability across **Vultr**, **Hetzner**,
 and **AWS** via ICMP ping. It watches your instances around the clock, alerts you the
@@ -13,8 +36,9 @@ Built on [aiogram 3.x](https://docs.aiogram.dev/), with one isolated worker proc
 server, supervised background tasks, and heartbeat-based stall detection for unattended
 24/7 operation.
 
-> The bot's user-facing text (messages, logs) is in Russian; the code, docstrings, and
-> this documentation are in English.
+> The bot's user-facing text is available in **English, Russian, and Ukrainian** — default
+> English, with each user picking their language in Settings (or `/language`). The code,
+> docstrings, and this documentation are in English.
 
 ---
 
@@ -29,6 +53,8 @@ server, supervised background tasks, and heartbeat-based stall detection for una
   debouncing of transient provider failures (alerts only on sustained outages).
 - **Power management from chat** — start, stop, reboot, and graceful (ACPI) shutdown where the
   provider supports it.
+- **Multilingual UI (EN / RU / UK)** — per-user language selection persisted across restarts;
+  even background alerts are rendered in each recipient's own language.
 - **Balance & cost tracking** — prepaid balance for Vultr, monthly costs via AWS Cost Explorer,
   with low-balance threshold alerts.
 - **Statistics** — hourly availability stats and ping-error history persisted in SQLite.

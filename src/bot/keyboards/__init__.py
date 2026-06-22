@@ -13,10 +13,12 @@ from .inline import (
     get_balance_settings_keyboard,
     get_balance_provider_keyboard,
     get_provider_selection_keyboard,
+    get_language_keyboard,
 )
 
 __all__ = [
     "get_main_menu_keyboard",
+    "get_language_keyboard",
     "get_monitoring_keyboard",
     "get_server_details_keyboard",
     "get_server_stats_keyboard",

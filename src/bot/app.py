@@ -8,8 +8,14 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import ErrorEvent
 
 from ..config import Settings
-from .middlewares import AdminCheckMiddleware
-from .routers import start_router, monitoring_router, servers_router, balance_router
+from .middlewares import AdminCheckMiddleware, LanguageMiddleware
+from .routers import (
+    start_router,
+    monitoring_router,
+    servers_router,
+    balance_router,
+    settings_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,14 +101,23 @@ def create_dispatcher(settings: Settings) -> Dispatcher:
     dp.message.middleware(admin_middleware)
     dp.callback_query.middleware(admin_middleware)
 
+    # Language middleware AFTER admin: resolves the (admin) sender's UI language
+    # into the context var + data dict so handlers/keyboards/formatters render in
+    # that language. Non-admins are already blocked by AdminCheckMiddleware.
+    language_middleware = LanguageMiddleware()
+    dp.message.middleware(language_middleware)
+    dp.callback_query.middleware(language_middleware)
+
     # Register routers
     logger.info("Registering routers...")
     dp.include_router(start_router)
+    dp.include_router(settings_router)
     dp.include_router(monitoring_router)
     dp.include_router(servers_router)
     dp.include_router(balance_router)
     logger.info(
-        "Routers registered: start_router, monitoring_router, servers_router, balance_router"
+        "Routers registered: start_router, settings_router, monitoring_router, "
+        "servers_router, balance_router"
     )
 
     # Global fallback error handler (backstops the un-decorated entry-point handlers)

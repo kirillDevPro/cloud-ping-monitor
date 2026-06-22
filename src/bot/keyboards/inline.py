@@ -5,6 +5,7 @@ import math
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from ...models import Server
+from ..i18n import _, LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 from ..utils.callback_data import encode_callback_data
 
 
@@ -108,7 +109,7 @@ def get_monitoring_keyboard(
 
     # "Refresh" button
     keyboard.append(
-        [InlineKeyboardButton(text="🔄 Обновить", callback_data=f"monitor_refresh_{page}")]
+        [InlineKeyboardButton(text=_("common.refresh"), callback_data=f"monitor_refresh_{page}")]
     )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -127,17 +128,17 @@ def get_server_details_keyboard(server_key: str) -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
-                text="📊 Статистика",
+                text=_("kb.statistics"),
                 callback_data=encode_callback_data("monitor_stats_", server_key),
             )
         ],
         [
             InlineKeyboardButton(
-                text="⚙️ Управление",
+                text=_("kb.manage"),
                 callback_data=encode_callback_data("server_control_", server_key),
             )
         ],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="monitor_back")],
+        [InlineKeyboardButton(text=_("common.back"), callback_data="monitor_back")],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -156,13 +157,13 @@ def get_server_stats_keyboard(server_key: str) -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
-                text="🔄 Обновить",
+                text=_("common.refresh"),
                 callback_data=encode_callback_data("monitor_stats_", server_key),
             )
         ],
         [
             InlineKeyboardButton(
-                text="◀️ Назад",
+                text=_("common.back"),
                 callback_data=encode_callback_data("monitor_details_", server_key),
             )
         ],
@@ -207,12 +208,12 @@ def get_servers_management_keyboard(
     # "Back to providers" button (only when a provider is selected)
     if provider:
         action_buttons.append(
-            InlineKeyboardButton(text="◀️ К провайдерам", callback_data="servers_back")
+            InlineKeyboardButton(text=_("kb.back_to_providers"), callback_data="servers_back")
         )
 
     # "Refresh" button
     refresh_data = f"servers_refresh_{provider}_{page}" if provider else f"servers_refresh_{page}"
-    action_buttons.append(InlineKeyboardButton(text="🔄 Обновить", callback_data=refresh_data))
+    action_buttons.append(InlineKeyboardButton(text=_("common.refresh"), callback_data=refresh_data))
 
     keyboard.append(action_buttons)
 
@@ -249,11 +250,11 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="🔄 Рестарт",
+                    text=_("kb.restart"),
                     callback_data=encode_callback_data("server_reboot_", server_key),
                 ),
                 InlineKeyboardButton(
-                    text="⏹️ Стоп",
+                    text=_("kb.stop"),
                     callback_data=encode_callback_data("server_stop_", server_key),
                 ),
             ]
@@ -262,7 +263,7 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="🔄 Обновить",
+                    text=_("common.refresh"),
                     callback_data=encode_callback_data("server_refresh_", server_key),
                 )
             ]
@@ -272,7 +273,7 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="▶️ Старт",
+                    text=_("kb.start"),
                     callback_data=encode_callback_data("server_start_", server_key),
                 )
             ]
@@ -281,7 +282,7 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="🔄 Обновить",
+                    text=_("common.refresh"),
                     callback_data=encode_callback_data("server_refresh_", server_key),
                 )
             ]
@@ -291,11 +292,11 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="▶️ Старт",
+                    text=_("kb.start"),
                     callback_data=encode_callback_data("server_start_", server_key),
                 ),
                 InlineKeyboardButton(
-                    text="⏹️ Стоп",
+                    text=_("kb.stop"),
                     callback_data=encode_callback_data("server_stop_", server_key),
                 ),
             ]
@@ -304,11 +305,11 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="🔄 Рестарт",
+                    text=_("kb.restart"),
                     callback_data=encode_callback_data("server_reboot_", server_key),
                 ),
                 InlineKeyboardButton(
-                    text="🔄 Обновить",
+                    text=_("common.refresh"),
                     callback_data=encode_callback_data("server_refresh_", server_key),
                 ),
             ]
@@ -320,14 +321,14 @@ def get_server_control_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text="🌙 Выключить (ACPI)",
+                    text=_("kb.shutdown_acpi"),
                     callback_data=encode_callback_data("server_shutdown_", server_key),
                 )
             ]
         )
 
     # [Back] row
-    keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="servers_back")])
+    keyboard.append([InlineKeyboardButton(text=_("common.back"), callback_data="servers_back")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -346,13 +347,13 @@ def get_confirmation_keyboard(action: str, server_key: str) -> InlineKeyboardMar
     keyboard = [
         [
             InlineKeyboardButton(
-                text="✅ Подтвердить",
+                text=_("kb.confirm"),
                 callback_data=encode_callback_data(f"server_confirm_{action}_", server_key),
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=_("kb.cancel"),
                 callback_data=encode_callback_data(f"server_cancel_{action}_", server_key),
             )
         ],
@@ -440,12 +441,14 @@ def get_balance_history_keyboard(
         # Current period - shown as selected
         period_buttons.append(
             InlineKeyboardButton(
-                text="• 7 дней •", callback_data=f"balance_history_7{provider_suffix}"
+                text=f"• {_('kb.period_7')} •", callback_data=f"balance_history_7{provider_suffix}"
             )
         )
     else:
         period_buttons.append(
-            InlineKeyboardButton(text="7 дней", callback_data=f"balance_history_7{provider_suffix}")
+            InlineKeyboardButton(
+                text=_("kb.period_7"), callback_data=f"balance_history_7{provider_suffix}"
+            )
         )
 
     # "30 days" button
@@ -453,13 +456,14 @@ def get_balance_history_keyboard(
         # Current period - shown as selected
         period_buttons.append(
             InlineKeyboardButton(
-                text="• 30 дней •", callback_data=f"balance_history_30{provider_suffix}"
+                text=f"• {_('kb.period_30')} •",
+                callback_data=f"balance_history_30{provider_suffix}",
             )
         )
     else:
         period_buttons.append(
             InlineKeyboardButton(
-                text="30 дней", callback_data=f"balance_history_30{provider_suffix}"
+                text=_("kb.period_30"), callback_data=f"balance_history_30{provider_suffix}"
             )
         )
 
@@ -471,7 +475,7 @@ def get_balance_history_keyboard(
     else:
         back_callback = "balance_back_to_main"
 
-    keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback)])
+    keyboard.append([InlineKeyboardButton(text=_("common.back"), callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -483,7 +487,7 @@ def get_balance_settings_keyboard() -> InlineKeyboardMarkup:
     Returns:
         InlineKeyboardMarkup: Keyboard with a "Back" button.
     """
-    keyboard = [[InlineKeyboardButton(text="◀️ Назад", callback_data="balance_back_to_main")]]
+    keyboard = [[InlineKeyboardButton(text=_("common.back"), callback_data="balance_back_to_main")]]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -499,8 +503,8 @@ def get_balance_provider_keyboard(provider_alias: str) -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: Keyboard with "History" and "Back" buttons.
     """
     keyboard = [
-        [InlineKeyboardButton(text="📊 История", callback_data=f"balance_history:{provider_alias}")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="balance_back_to_main")],
+        [InlineKeyboardButton(text=_("kb.history"), callback_data=f"balance_history:{provider_alias}")],
+        [InlineKeyboardButton(text=_("common.back"), callback_data="balance_back_to_main")],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -541,5 +545,32 @@ def get_provider_selection_keyboard(servers: list[Server]) -> InlineKeyboardMark
                     )
                 ]
             )
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_language_keyboard(current_language: str) -> InlineKeyboardMarkup:
+    """
+    Build the language-picker inline keyboard.
+
+    One button per supported language; the active language is marked with bullets.
+    Language names are proper nouns (🇬🇧 English / 🇷🇺 Русский) shown identically in
+    every UI language, so they are not translated. The callback encodes the target
+    language code (``set_lang_en`` / ``set_lang_ru``).
+
+    Args:
+        current_language: The user's currently active language code.
+
+    Returns:
+        InlineKeyboardMarkup: One row per supported language.
+    """
+    keyboard: list[list[InlineKeyboardButton]] = []
+    for language in SUPPORTED_LANGUAGES:
+        label = LANGUAGE_NAMES[language]
+        if language == current_language:
+            label = f"• {label} •"
+        keyboard.append(
+            [InlineKeyboardButton(text=label, callback_data=f"set_lang_{language}")]
+        )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

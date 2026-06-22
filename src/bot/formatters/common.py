@@ -2,6 +2,8 @@
 
 from aiogram import html
 
+from ..i18n import _
+
 
 def esc(value: object) -> str:
     """HTML-escape a dynamic value for safe interpolation into an HTML message.
@@ -40,13 +42,13 @@ def format_number(value: int) -> str:
 
 def format_days_as_period(days: int) -> str:
     """
-    Convert a number of days into the format 'X г. Y мес.' or 'X мес.'.
+    Convert a number of days into a localized years/months period string.
 
     Args:
-        days: Number of days
+        days: Number of days.
 
     Returns:
-        str: Formatted string, or an empty string if less than a month
+        str: Localized period string, or an empty string when less than a month.
     """
     if days < 30:
         return ""  # Too few to express in months
@@ -56,8 +58,8 @@ def format_days_as_period(days: int) -> str:
     months = months_total % 12
 
     if years > 0 and months > 0:
-        return f"{years} г. {months} мес."
+        return _("period.years_months", years=years, months=months)
     elif years > 0:
-        return f"{years} г."
+        return _("period.years", years=years)
     else:
-        return f"{months} мес."
+        return _("period.months", months=months)

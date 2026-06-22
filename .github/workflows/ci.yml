@@ -32,3 +32,6 @@ jobs:
 
       - name: Mypy (type-check)
         run: mypy src --ignore-missing-imports --no-strict-optional
+
+      - name: i18n locale parity
+        run: python scripts/check_i18n_locales.py
