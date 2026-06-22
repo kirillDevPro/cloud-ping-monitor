@@ -1,24 +1,24 @@
-# systemd unit for running cloud-ping-monitor 24/7 without Docker.
+# systemd unit for running cloud-control-bot 24/7 without Docker.
 #
 # Install (adjust paths/user to your deployment):
-#   sudo useradd --system --create-home --home-dir /opt/cloud-ping-monitor cpm
-#   # deploy the code to /opt/cloud-ping-monitor, create the venv and .env there
-#   sudo cp deploy/cloud-ping-monitor.service /etc/systemd/system/
+#   sudo useradd --system --create-home --home-dir /opt/cloud-control-bot cpm
+#   # deploy the code to /opt/cloud-control-bot, create the venv and .env there
+#   sudo cp deploy/cloud-control-bot.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now cloud-ping-monitor
-#   journalctl -u cloud-ping-monitor -f      # follow logs
+#   sudo systemctl enable --now cloud-control-bot
+#   journalctl -u cloud-control-bot -f      # follow logs
 
 [Unit]
-Description=cloud-ping-monitor Telegram bot
+Description=cloud-control-bot Telegram bot
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=cpm
-WorkingDirectory=/opt/cloud-ping-monitor
-EnvironmentFile=/opt/cloud-ping-monitor/.env
-ExecStart=/opt/cloud-ping-monitor/venv/bin/python main.py
+WorkingDirectory=/opt/cloud-control-bot
+EnvironmentFile=/opt/cloud-control-bot/.env
+ExecStart=/opt/cloud-control-bot/venv/bin/python main.py
 
 # Restart the PROCESS on crash. The in-app supervisor only restarts background
 # tasks, not main.py itself, so this is what keeps the bot alive after a hard crash.

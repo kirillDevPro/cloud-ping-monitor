@@ -1,8 +1,8 @@
 services:
   bot:
     build: .
-    image: cloud-ping-monitor
-    container_name: cloud-ping-monitor
+    image: cloud-control-bot
+    container_name: cloud-control-bot
     # Secrets (TELEGRAM_BOT_TOKEN, ADMIN_IDS, provider keys) are read at runtime
     # from .env — they are NOT baked into the image (.env is in .dockerignore).
     env_file: .env

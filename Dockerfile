@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# cloud-ping-monitor container image.
+# cloud-control-bot container image.
 #
 # ICMP ping (ping3) needs a raw socket. Instead of running as root, the python
 # interpreter is granted CAP_NET_RAW via file capabilities, so an unprivileged

@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="assets/logo.png" alt="cloud-ping-monitor" width="180" height="180">
+  <img src="assets/logo.png" alt="cloud-control-bot" width="180" height="180">
 </p>
 
-<h1 align="center">cloud-ping-monitor</h1>
+<h1 align="center">cloud-control-bot</h1>
 
 <p align="center">
   <b>Monitor uptime, power-control, and track costs of your cloud servers — all from Telegram. Vultr · Hetzner · AWS</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml"><img src="https://github.com/kirillDevPro/cloud-ping-monitor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/kirillDevPro/cloud-control-bot/actions/workflows/ci.yml"><img src="https://github.com/kirillDevPro/cloud-control-bot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg" alt="Python 3.12 | 3.13"></a>
   <a href="https://docs.aiogram.dev/"><img src="https://img.shields.io/badge/aiogram-3.x-2CA5E0?logo=telegram&logoColor=white" alt="aiogram 3.x"></a>
   <img src="https://img.shields.io/badge/i18n-EN%20%7C%20RU%20%7C%20UK-success" alt="i18n: EN | RU | UK">
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
-  <a href="https://github.com/kirillDevPro/cloud-ping-monitor/stargazers"><img src="https://img.shields.io/github/stars/kirillDevPro/cloud-ping-monitor?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/kirillDevPro/cloud-control-bot/stargazers"><img src="https://img.shields.io/github/stars/kirillDevPro/cloud-control-bot?style=social" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
@@ -155,8 +155,8 @@ main.py              entry point
 ## Installation
 
 ```bash
-git clone https://github.com/kirillDevPro/cloud-ping-monitor.git
-cd cloud-ping-monitor
+git clone https://github.com/kirillDevPro/cloud-control-bot.git
+cd cloud-control-bot
 
 python -m venv venv
 # Linux/macOS:
@@ -270,15 +270,15 @@ volumes, and restarts automatically (`restart: unless-stopped`).
 
 ### systemd (without Docker)
 
-A sample unit lives at [`deploy/cloud-ping-monitor.service`](deploy/cloud-ping-monitor.service).
+A sample unit lives at [`deploy/cloud-control-bot.service`](deploy/cloud-control-bot.service).
 It restarts the process on failure and grants `CAP_NET_RAW` via `AmbientCapabilities`
 (no `setcap` needed). Adjust the paths/user, then:
 
 ```bash
-sudo cp deploy/cloud-ping-monitor.service /etc/systemd/system/
+sudo cp deploy/cloud-control-bot.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now cloud-ping-monitor
-journalctl -u cloud-ping-monitor -f
+sudo systemctl enable --now cloud-control-bot
+journalctl -u cloud-control-bot -f
 ```
 
 ---

@@ -9,7 +9,7 @@ please run the current code before reporting an issue.
 
 Please report security issues **privately**, not via public issues or pull requests.
 
-- Use GitHub's [private vulnerability reporting](https://github.com/kirillDevPro/cloud-ping-monitor/security/advisories/new)
+- Use GitHub's [private vulnerability reporting](https://github.com/kirillDevPro/cloud-control-bot/security/advisories/new)
   (the **Report a vulnerability** button on the repository's *Security* tab), or
 - open a minimal public issue asking for a private contact channel — without any
   sensitive details.
