@@ -12,7 +12,7 @@
   <a href="https://github.com/kirillDevPro/cloud-control-bot/actions/workflows/ci.yml"><img src="https://github.com/kirillDevPro/cloud-control-bot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg" alt="Python 3.12 | 3.13"></a>
   <a href="https://docs.aiogram.dev/"><img src="https://img.shields.io/badge/aiogram-3.x-2CA5E0?logo=telegram&logoColor=white" alt="aiogram 3.x"></a>
-  <img src="https://img.shields.io/badge/i18n-EN%20%7C%20RU%20%7C%20UK-success" alt="i18n: EN | RU | UK">
+  <img src="https://img.shields.io/badge/i18n-EN%20%7C%20RU%20%7C%20UK%20%7C%20ES-success" alt="i18n: EN | RU | UK | ES">
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <a href="https://github.com/kirillDevPro/cloud-control-bot/stargazers"><img src="https://img.shields.io/github/stars/kirillDevPro/cloud-control-bot?style=social" alt="GitHub stars"></a>
@@ -39,7 +39,7 @@ Built on [aiogram 3.x](https://docs.aiogram.dev/), with one isolated worker proc
 server, supervised background tasks, and heartbeat-based stall detection for unattended
 24/7 operation.
 
-> The bot's user-facing text is available in **English, Russian, and Ukrainian** — default
+> The bot's user-facing text is available in **English, Russian, Ukrainian, and Spanish** — default
 > English, with each user picking their language in Settings (or `/language`). The code,
 > docstrings, and this documentation are in English.
 
@@ -56,7 +56,7 @@ server, supervised background tasks, and heartbeat-based stall detection for una
   debouncing of transient provider failures (alerts only on sustained outages).
 - **Power management from chat** — start, stop, reboot, and graceful (ACPI) shutdown where the
   provider supports it.
-- **Multilingual UI (EN / RU / UK)** — per-user language selection persisted across restarts;
+- **Multilingual UI (EN / RU / UK / ES)** — per-user language selection persisted across restarts;
   even background alerts are rendered in each recipient's own language.
 - **Balance & cost tracking** — prepaid balance for Vultr, monthly costs via AWS Cost Explorer,
   with low-balance threshold alerts.
@@ -294,7 +294,7 @@ Then run the same checks CI runs (ruff/mypy configured in `pyproject.toml`):
 ```bash
 ruff check src main.py scripts/check_i18n_locales.py
 mypy src main.py scripts/check_i18n_locales.py
-python scripts/check_i18n_locales.py   # EN/RU/UK locale parity
+python scripts/check_i18n_locales.py   # EN/RU/UK/ES locale parity
 ```
 
 All three run automatically in CI on every push and pull request, across Linux and
@@ -321,8 +321,8 @@ Windows on Python 3.12 and 3.13.
 Issues and pull requests are welcome. Please run `ruff` and `mypy` before opening a PR and
 keep the existing conventions: code, docstrings, and comments in English; user-facing
 strings go through the i18n catalog (`src/bot/i18n/locales/`) — English (`en.py`) is the
-source of truth, Russian and Ukrainian are translations of it, never hard-code a UI string.
-Adding a new message means adding it to all three locales (the `python scripts/check_i18n_locales.py`
+source of truth, Russian, Ukrainian, and Spanish are translations of it, never hard-code a UI string.
+Adding a new message means adding it to every locale (the `python scripts/check_i18n_locales.py`
 parity check, which CI runs, fails otherwise).
 
 ---

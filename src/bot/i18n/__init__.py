@@ -1,4 +1,4 @@
-"""Internationalization (i18n) for the bot — English + Russian.
+"""Internationalization (i18n) for the bot — English, Russian, Ukrainian, Spanish.
 
 Public API:
 

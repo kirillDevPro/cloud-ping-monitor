@@ -4,7 +4,7 @@ Provider/storage exceptions carry an English ``message`` that is always kept for
 logs. When such an error must be SHOWN to a Telegram admin — an operation-failure
 screen or a provider-outage/critical alert — the detail has to read in the
 recipient's own language. This module maps each user-reachable exception type to
-a catalog key plus parameters, so the same failure renders in EN / RU / UK.
+a catalog key plus parameters, so the same failure renders in every supported language.
 Exceptions with no mapping fall back to their English ``str()`` (the full
 technical text — HTTP codes, retry seconds, IAM hints — stays in the logs).
 

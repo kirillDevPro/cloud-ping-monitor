@@ -358,11 +358,11 @@ async def main() -> None:
 
     # 6. Register bot commands, localized per Telegram client language.
     #    The default (English) scope covers every client locale without a specific
-    #    set; Russian- and Ukrainian-locale clients additionally get their own
-    #    descriptions. (The /start reply itself uses each user's stored language,
-    #    independent of this client-language command menu.)
+    #    set; each additional supported language gets its own descriptions for
+    #    clients in that locale. (The /start reply itself uses each user's stored
+    #    language, independent of this client-language command menu.)
     try:
-        from src.bot.i18n import DEFAULT_LANGUAGE, translate
+        from src.bot.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, translate
 
         def _commands_for(language: str) -> list[BotCommand]:
             """Build bot-command descriptions for one Telegram client language.
@@ -381,9 +381,14 @@ async def main() -> None:
                 ),
             ]
 
+        # Default (unscoped) menu in the default language, then a scoped menu for
+        # every other supported language — so a new locale is picked up automatically.
         await container.bot.set_my_commands(_commands_for(DEFAULT_LANGUAGE))
-        await container.bot.set_my_commands(_commands_for("ru"), language_code="ru")
-        await container.bot.set_my_commands(_commands_for("uk"), language_code="uk")
+        for language in SUPPORTED_LANGUAGES:
+            if language != DEFAULT_LANGUAGE:
+                await container.bot.set_my_commands(
+                    _commands_for(language), language_code=language
+                )
         logger.info("Bot commands registered")
     except Exception as e:
         logger.error(f"Failed to register bot commands: {e}", exc_info=True)

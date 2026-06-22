@@ -1,5 +1,5 @@
 """Per-language translation catalogs (one module per locale)."""
 
-from . import en, ru, uk
+from . import en, es, ru, uk
 
-__all__ = ["en", "ru", "uk"]
+__all__ = ["en", "es", "ru", "uk"]

@@ -1,4 +1,4 @@
-"""Lightweight runtime translator for the bot (RU/EN).
+"""Lightweight runtime translator for the bot's supported languages.
 
 The translator resolves a message key to a localized string using the active
 language stored in a :class:`contextvars.ContextVar`. A middleware sets that
@@ -16,13 +16,15 @@ Two resolution modes are provided:
   rendered once per recipient in that recipient's own language.
 
 Plural-aware keys live in :data:`PLURAL_CATALOG` and are resolved via
-:func:`plural` / :func:`translate_plural`, which apply the Russian/English plural
-rules.
+:func:`plural` / :func:`translate_plural`, which apply each locale's plural rule:
+two forms (one/other) for English and Spanish, three East-Slavic forms
+(one/few/many) for Russian and Ukrainian.
 
 The catalog lives in :mod:`src.bot.i18n.catalog`, which assembles the per-locale
-modules (``locales/en.py``, ``locales/ru.py``) into the language-keyed
-:data:`MESSAGE_CATALOG` / :data:`PLURAL_CATALOG` tables this module indexes; this
-module only holds the resolution logic so it stays free of cyclic imports.
+modules under ``locales/`` (one ``<lang>.py`` per supported language) into the
+language-keyed :data:`MESSAGE_CATALOG` / :data:`PLURAL_CATALOG` tables this module
+indexes; this module only holds the resolution logic so it stays free of cyclic
+imports.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # Supported UI languages. The first entry is the project-wide default applied to
 # any user who has never explicitly picked a language.
-SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "ru", "uk")
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "ru", "uk", "es")
 DEFAULT_LANGUAGE: str = "en"
 
 # Human-readable language names used on the language-picker buttons.
@@ -44,6 +46,7 @@ LANGUAGE_NAMES: dict[str, str] = {
     "en": "🇬🇧 English",
     "ru": "🇷🇺 Русский",
     "uk": "🇺🇦 Українська",
+    "es": "🇪🇸 Español",
 }
 
 # Languages that use the East-Slavic three-form plural rule (one/few/many).

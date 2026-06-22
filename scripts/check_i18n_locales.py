@@ -6,8 +6,8 @@ Exits non-zero (failing the build) when any of these hold:
 1. The locales do not define exactly the same ``MESSAGES`` / ``PLURALS`` keys
    (a key present in one language but missing in another).
 2. Any translation value is empty or whitespace-only (an untranslated field).
-3. A plural entry has the wrong number of forms (English = 2 one/other,
-   Russian = 3 one/few/many).
+3. A plural entry has the wrong number of forms (per PLURAL_FORM_COUNT:
+   English/Spanish = 2 one/other, Russian/Ukrainian = 3 one/few/many).
 4. An i18n key referenced in the code (``_("...")``, ``translate("...")``,
    ``render_message("...")``, ``title_key="..."``, ``MainMenuButton("...")``, …)
    is missing from the catalog — which would silently show users the raw key.
@@ -33,8 +33,8 @@ LOCALES_DIR = ROOT / "src" / "bot" / "i18n" / "locales"
 SRC_DIR = ROOT / "src"
 
 # Locales to compare and the exact plural-form count each requires.
-SUPPORTED_LANGUAGES = ("en", "ru", "uk")
-PLURAL_FORM_COUNT = {"en": 2, "ru": 3, "uk": 3}
+SUPPORTED_LANGUAGES = ("en", "ru", "uk", "es")
+PLURAL_FORM_COUNT = {"en": 2, "ru": 3, "uk": 3, "es": 2}
 
 # A dotted lower-case identifier — the shape of every catalog key ("menu.monitoring").
 KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$")
