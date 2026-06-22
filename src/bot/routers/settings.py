@@ -43,14 +43,16 @@ settings_router = Router(name="settings")
 
 
 def _menu_text() -> str:
-    """Build the settings hub screen body, listing the available sections.
+    """Build the settings hub screen body, listing each section with a description.
 
     Returns:
-        str: The HTML hub text — title, the choose-a-section prompt, then one line
-            per section in SETTINGS_SECTIONS (its localized label).
+        str: The HTML hub text — title, the choose-a-section prompt, then one
+            ``label — description`` line per section in SETTINGS_SECTIONS.
     """
-    sections = "\n".join(_(section[0]) for section in SETTINGS_SECTIONS)
-    return _("settings.title") + "\n\n" + _("settings.choose_section") + "\n" + sections
+    sections = "\n".join(
+        f"{_(label_key)} — {_(desc_key)}" for label_key, desc_key, _cb in SETTINGS_SECTIONS
+    )
+    return _("settings.title") + "\n\n" + _("settings.choose_section") + "\n\n" + sections
 
 
 def _language_text(language: str) -> str:

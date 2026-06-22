@@ -549,11 +549,12 @@ def get_provider_selection_keyboard(servers: list[Server]) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-# Settings hub sections: (i18n label key, callback_data). Single source of truth
-# for the hub — both the hub keyboard and the section list shown in the hub message
-# text are built from this, so a new setting is added in exactly one place.
-SETTINGS_SECTIONS: list[tuple[str, str]] = [
-    ("settings.section_language", "settings_lang"),
+# Settings hub sections: (label i18n key, description i18n key, callback_data).
+# Single source of truth for the hub — both the hub keyboard (label + callback) and
+# the section list in the hub message text (label + description) are built from
+# this, so a new setting is added in exactly one place.
+SETTINGS_SECTIONS: list[tuple[str, str, str]] = [
+    ("settings.section_language", "settings.section_language_desc", "settings_lang"),
 ]
 
 
@@ -569,8 +570,8 @@ def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: One row per settings section.
     """
     keyboard = [
-        [InlineKeyboardButton(text=_(key), callback_data=callback_data)]
-        for key, callback_data in SETTINGS_SECTIONS
+        [InlineKeyboardButton(text=_(label_key), callback_data=callback_data)]
+        for label_key, desc_key, callback_data in SETTINGS_SECTIONS
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
