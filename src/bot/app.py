@@ -33,7 +33,7 @@ def create_bot(settings: Settings) -> Bot:
     bot = Bot(
         token=settings.TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML  # HTML for message formatting
+            parse_mode=ParseMode.HTML  # vestigial default; sends go via rich (utils/rich.py)
         ),
     )
 

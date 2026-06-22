@@ -31,7 +31,6 @@ MESSAGES: dict[str, str] = {
     'common.back': '◀️ Back',
     'common.refresh': '🔄 Refresh',
     'common.refreshed': '✅ Refreshed',
-    'common.no_data': 'No data',
     'common.invalid_data_format': '❌ Invalid data format',
     'common.server_not_found': '❌ Server not found',
     'common.page_change_error': '❌ Failed to switch page',
@@ -106,9 +105,9 @@ MESSAGES: dict[str, str] = {
     'time.na': 'n/a',
     # stats
     'stats.title': '📊 <b>Statistics: {name}</b>',
-    'stats.section_1h': '━━━ <b>Last 1 hour</b> ━━━',
-    'stats.section_24h': '━━━ <b>Last 24 hours</b> ━━━',
-    'stats.section_7d': '━━━ <b>Last 7 days</b> ━━━',
+    # col (rich table headers)
+    'col.provider': 'Provider',
+    'col.period': 'Period',
     # srv
     'srv.manage_title': '🖥️ <b>Server management</b>',
     'srv.empty': (

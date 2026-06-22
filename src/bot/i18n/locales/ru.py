@@ -31,7 +31,6 @@ MESSAGES: dict[str, str] = {
     'common.back': '◀️ Назад',
     'common.refresh': '🔄 Обновить',
     'common.refreshed': '✅ Обновлено',
-    'common.no_data': 'Нет данных',
     'common.invalid_data_format': '❌ Некорректный формат данных',
     'common.server_not_found': '❌ Сервер не найден',
     'common.page_change_error': '❌ Ошибка при переходе на страницу',
@@ -106,9 +105,9 @@ MESSAGES: dict[str, str] = {
     'time.na': 'н/д',
     # stats
     'stats.title': '📊 <b>Статистика: {name}</b>',
-    'stats.section_1h': '━━━ <b>За 1 час</b> ━━━',
-    'stats.section_24h': '━━━ <b>За 24 часа</b> ━━━',
-    'stats.section_7d': '━━━ <b>За 7 дней</b> ━━━',
+    # col (rich table headers)
+    'col.provider': 'Провайдер',
+    'col.period': 'Период',
     # srv
     'srv.manage_title': '🖥️ <b>Управление серверами</b>',
     'srv.empty': (

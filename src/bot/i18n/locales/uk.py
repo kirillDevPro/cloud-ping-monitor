@@ -31,7 +31,6 @@ MESSAGES: dict[str, str] = {
     'common.back': '◀️ Назад',
     'common.refresh': '🔄 Оновити',
     'common.refreshed': '✅ Оновлено',
-    'common.no_data': 'Немає даних',
     'common.invalid_data_format': '❌ Некоректний формат даних',
     'common.server_not_found': '❌ Сервер не знайдено',
     'common.page_change_error': '❌ Помилка переходу на сторінку',
@@ -106,9 +105,9 @@ MESSAGES: dict[str, str] = {
     'time.na': 'н/д',
     # stats
     'stats.title': '📊 <b>Статистика: {name}</b>',
-    'stats.section_1h': '━━━ <b>За 1 годину</b> ━━━',
-    'stats.section_24h': '━━━ <b>За 24 години</b> ━━━',
-    'stats.section_7d': '━━━ <b>За 7 днів</b> ━━━',
+    # col (rich table headers)
+    'col.provider': 'Провайдер',
+    'col.period': 'Період',
     # srv
     'srv.manage_title': '🖥️ <b>Керування серверами</b>',
     'srv.empty': (

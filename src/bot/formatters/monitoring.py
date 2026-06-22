@@ -10,7 +10,15 @@ from ...storage import SqliteStatisticsRepository
 from ...storage.balance import BalanceRepository
 from ...providers.manager import ProviderManager
 from ..i18n import _
-from .common import format_number, esc
+from ..utils.rich import blocks, details, stack, table
+from .common import (
+    STATS_METRIC_HEADERS,
+    esc,
+    format_number,
+    plain,
+    stats_metric_cells,
+    strip_rule,
+)
 from .balance import collect_provider_balances
 
 logger = logging.getLogger(__name__)
@@ -92,17 +100,24 @@ def format_monitoring_dashboard(
     # Compute the average uptime
     avg_uptime = uptime_sum / servers_with_stats if servers_with_stats > 0 else 0.0
 
-    # Build the message
-    text = _("mon.dashboard_title") + "\n\n"
+    # Build the rich screen as blank-line-separated sections (blocks), each a
+    # stack of <br>-joined lines. strip_rule() drops the legacy ━━━ section
+    # decoration from the reused catalog headers; tables carry the genuinely
+    # columnar data (per-provider breakdown).
+    sections: list[str] = [_("mon.dashboard_title")]
 
-    # Section: general server information
-    text += _("mon.section_servers") + "\n"
-    text += _("mon.total_servers", count=total_servers) + "\n"
-    text += _("mon.online", count=online_count) + "\n"
-    text += _("mon.offline", count=offline_count) + "\n"
-    text += _("mon.unknown", count=unknown_count) + "\n\n"
+    # Section: overall server status (header + counts).
+    sections.append(
+        stack(
+            strip_rule(_("mon.section_servers")),
+            _("mon.total_servers", count=total_servers),
+            _("mon.online", count=online_count),
+            _("mon.offline", count=offline_count),
+            _("mon.unknown", count=unknown_count),
+        )
+    )
 
-    # Section: finances (if data is available)
+    # Section: finances (only when at least one provider reports balance).
     if balance_repo is not None and provider_manager is not None:
         provider_balances = collect_provider_balances(balance_repo, provider_manager)
 
@@ -133,31 +148,41 @@ def format_monitoring_dashboard(
                 if monthly is not None:
                     total_expenses += monthly
 
-            providers_count = len(providers_with_balance)
-            text += _("mon.section_finance", count=providers_count) + "\n"
-            text += _("mon.finance_balance", amount=total_balance) + "\n"
-            text += _("mon.finance_expenses", amount=total_expenses) + "\n\n"
+            sections.append(
+                stack(
+                    strip_rule(_("mon.section_finance", count=len(providers_with_balance))),
+                    _("mon.finance_balance", amount=total_balance),
+                    _("mon.finance_expenses", amount=total_expenses),
+                )
+            )
 
-    # Section: ping statistics for the last 24 hours
-    if total_pings > 0:
-        text += _("mon.section_stats_24h") + "\n"
-        text += _("mon.total_pings", value=format_number(total_pings)) + "\n"
-        text += _("mon.successful", value=format_number(successful_pings)) + "\n"
-        text += _("mon.errors", value=format_number(failed_pings)) + "\n"
-        text += _("mon.timeout", value=format_number(timeout_pings)) + "\n"
-        text += _("mon.avg_uptime", value=avg_uptime) + "\n\n"
-    else:
-        text += _("mon.section_stats_24h") + "\n"
-        text += _("mon.no_ping_data") + "\n\n"
-
-    # Section: per-provider statistics (counts only — no translatable words)
+    # Section: per-provider breakdown as a table (provider | total | online | offline).
     if provider_stats:
-        text += _("mon.section_by_provider") + "\n"
-        for provider, stats in sorted(provider_stats.items()):
-            text += f"<b>{esc(provider)}:</b> {stats['total']} "
-            text += f"(🟢 {stats['online']} | 🔴 {stats['offline']})\n"
+        provider_rows = [
+            [provider, stats["total"], stats["online"], stats["offline"]]
+            for provider, stats in sorted(provider_stats.items())
+        ]
+        sections.append(
+            stack(
+                strip_rule(_("mon.section_by_provider")),
+                table([_("col.provider"), "🖥️", "🟢", "🔴"], provider_rows),
+            )
+        )
 
-    return text
+    # Section: aggregate ping statistics for the last 24 hours.
+    if total_pings > 0:
+        stats_body = stack(
+            _("mon.total_pings", value=format_number(total_pings)),
+            _("mon.successful", value=format_number(successful_pings)),
+            _("mon.errors", value=format_number(failed_pings)),
+            _("mon.timeout", value=format_number(timeout_pings)),
+            _("mon.avg_uptime", value=avg_uptime),
+        )
+    else:
+        stats_body = _("mon.no_ping_data")
+    sections.append(stack(strip_rule(_("mon.section_stats_24h")), stats_body))
+
+    return blocks(*sections)
 
 
 def format_servers_list(servers: list[Server], shared_state: DictProxy, page: int = 0) -> str:
@@ -192,19 +217,35 @@ def format_servers_list(servers: list[Server], shared_state: DictProxy, page: in
         else:
             unknown_count += 1
 
-    # Build the message
-    text = _("mon.list_title") + "\n\n"
-
-    # Overall statistics
-    text += _("mon.total_servers", count=len(servers)) + "\n"
-    text += (
-        _("mon.status_inline", online=online_count, offline=offline_count, unknown=unknown_count)
-        + "\n\n"
+    return blocks(
+        _("mon.list_title"),
+        stack(
+            _("mon.total_servers", count=len(servers)),
+            _(
+                "mon.status_inline",
+                online=online_count,
+                offline=offline_count,
+                unknown=unknown_count,
+            ),
+        ),
+        _("mon.choose_server"),
     )
 
-    text += _("mon.choose_server")
 
-    return text
+def _stats_period_row(period_label: str, stats: PingStatistics | None) -> list[object]:
+    """Return a statistics table row for one period (label + metric cells).
+
+    Args:
+        period_label: Short period label for the first column (e.g. "1h").
+        stats: The period's statistics, or None / empty when no data exists.
+
+    Returns:
+        list[object]: ``[label, uptime, successful/total, avg]`` — metric cells
+            are ``—`` when the period has no pings.
+    """
+    if stats is None or stats.total_pings == 0:
+        return [period_label, "—", "—", "—"]
+    return [period_label, *stats_metric_cells(stats)]
 
 
 def format_server_details(
@@ -214,7 +255,10 @@ def format_server_details(
     recent_errors: list[PingResult],
 ) -> str:
     """
-    Format detailed information about a server.
+    Format detailed information about a server as a rich message.
+
+    Renders a visible key:value block, a compact 24-hour statistics table, and a
+    collapsible <details> list of recent problems.
 
     Args:
         server: Server.
@@ -223,7 +267,7 @@ def format_server_details(
         recent_errors: Recent errors (failed/timeout pings).
 
     Returns:
-        Formatted text with the server details in the active language.
+        Formatted rich-HTML text with the server details in the active language.
     """
     # Resolve the status
     status = state.get("status", "unknown")
@@ -237,44 +281,52 @@ def format_server_details(
         status_emoji = "❓"
         status_text = _("status.unknown")
 
-    # Basic information
-    text = f"🖥️ <b>{esc(server.get_display_name())}</b>\n\n"
-    text += _("details.status_label") + f" {status_emoji} {status_text}\n"
-    text += _("details.provider_label") + f" {esc(server.effective_alias.upper())}\n"
-    text += _("details.ip_label") + f" {esc(server.ip)}\n"
-
+    # Visible key:value detail lines (IP in <code> for monospace + easy copy).
+    info_lines = [
+        _("details.status_label") + f" {status_emoji} {status_text}",
+        _("details.provider_label") + f" {esc(server.effective_alias.upper())}",
+        _("details.ip_label") + f" <code>{esc(server.ip)}</code>",
+    ]
     if server.region:
-        text += _("details.region_label") + f" {esc(server.region)}\n"
+        info_lines.append(_("details.region_label") + f" {esc(server.region)}")
     if server.plan:
-        text += _("details.plan_label") + f" {esc(server.plan)}\n"
+        info_lines.append(_("details.plan_label") + f" {esc(server.plan)}")
     if server.os:
-        text += _("details.os_label") + f" {esc(server.os)}\n"
+        info_lines.append(_("details.os_label") + f" {esc(server.os)}")
     if server.vcpu_count and server.ram_mb:
-        text += _("details.resources_label") + f" {server.vcpu_count} vCPU | {server.ram_mb} MB RAM"
+        resources = f" {server.vcpu_count} vCPU | {server.ram_mb} MB RAM"
         if server.disk_gb:
-            text += f" | {server.disk_gb} " + _("details.disk_suffix")
-        text += "\n"
+            resources += f" | {server.disk_gb} " + _("details.disk_suffix")
+        info_lines.append(_("details.resources_label") + resources)
 
-    # Last ping information
     last_check = state.get("last_ping_time")
     if last_check:
-        text += "\n" + _("details.last_ping_label") + f" {esc(last_check)}\n"
-
+        info_lines.append(_("details.last_ping_label") + f" {esc(last_check)}")
     response_time = state.get("response_time_ms")
     if response_time is not None:
-        text += _("details.response_time_label") + f" {response_time:.2f} ms\n"
-
+        info_lines.append(_("details.response_time_label") + f" {response_time:.2f} ms")
     monitoring_state = _("details.monitoring_on") if server.enabled else _("details.monitoring_off")
-    text += _("details.monitoring_label") + f" {monitoring_state}\n"
+    info_lines.append(_("details.monitoring_label") + f" {monitoring_state}")
 
-    # Statistics for the last 24 hours
-    if stats_24h:
-        text += "\n" + _("details.stats_24h_header") + "\n\n"
-        text += stats_24h.get_display_text()
+    sections: list[str] = [
+        f"🖥️ <b>{esc(server.get_display_name())}</b>",
+        stack(*info_lines),
+    ]
 
-    # Recent problems (errors only)
+    # 24-hour statistics as a compact metric table (only with real data:
+    # get_recent_statistics() returns a non-None record with total_pings=0 for a
+    # no-data window, matching the total_pings>0 guard used at every other site).
+    if stats_24h and stats_24h.total_pings > 0:
+        sections.append(
+            stack(
+                strip_rule(_("details.stats_24h_header")),
+                table(STATS_METRIC_HEADERS, [stats_metric_cells(stats_24h)]),
+            )
+        )
+
+    # Recent problems in a collapsible <details> block (secondary information).
     if recent_errors:
-        text += "\n\n" + _("details.recent_problems") + "\n"
+        problem_entries: list[str] = []
         for error in recent_errors[:5]:
             # Format the elapsed time
             try:
@@ -291,15 +343,14 @@ def format_server_details(
                 logger.warning(f"Failed to calculate time diff for error: {e}")
                 time_ago = _("time.na")
 
-            # Format the error status (technical enum value — not translated)
-            status_text = error.status.value.upper()
-            text += f"🔴 {status_text} ({time_ago})\n"
-
-            # Show the error description if present
+            # Technical enum value — not translated.
+            entry = f"🔴 {esc(error.status.value.upper())} ({time_ago})"
             if error.error:
-                text += f"   {esc(error.error)}\n"
+                entry = stack(entry, f"<i>{esc(error.error)}</i>")
+            problem_entries.append(entry)
+        sections.append(details(plain(_("details.recent_problems")), stack(*problem_entries)))
 
-    return text
+    return blocks(*sections)
 
 
 def format_statistics(
@@ -318,34 +369,18 @@ def format_statistics(
         stats_7d: Statistics for the last 7 days.
 
     Returns:
-        Formatted text with the statistics in the active language.
+        Formatted rich-HTML text with the statistics in the active language.
     """
-    text = _("stats.title", name=esc(server.get_display_name())) + "\n\n"
-
-    # For the last 1 hour
-    if stats_1h:
-        text += _("stats.section_1h") + "\n"
-        text += stats_1h.get_display_text()
-        text += "\n\n"
-    else:
-        text += _("stats.section_1h") + "\n"
-        text += _("common.no_data") + "\n\n"
-
-    # For the last 24 hours
-    if stats_24h:
-        text += _("stats.section_24h") + "\n"
-        text += stats_24h.get_display_text()
-        text += "\n\n"
-    else:
-        text += _("stats.section_24h") + "\n"
-        text += _("common.no_data") + "\n\n"
-
-    # For the last 7 days
-    if stats_7d:
-        text += _("stats.section_7d") + "\n"
-        text += stats_7d.get_display_text()
-    else:
-        text += _("stats.section_7d") + "\n"
-        text += _("common.no_data")
-
-    return text
+    # One table, one row per period (1h / 24h / 7d), columns: uptime, successful/
+    # total, average latency. Empty periods render as "—" cells.
+    return blocks(
+        _("stats.title", name=esc(server.get_display_name())),
+        table(
+            [_("col.period"), *STATS_METRIC_HEADERS],
+            [
+                _stats_period_row("1h", stats_1h),
+                _stats_period_row("24h", stats_24h),
+                _stats_period_row("7d", stats_7d),
+            ],
+        ),
+    )

@@ -35,6 +35,7 @@ from ..utils import (
     safe_edit_message,
     show_screen,
 )
+from ..utils.rich import blocks, stack
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +50,10 @@ def _menu_text() -> str:
         str: The HTML hub text — title, the choose-a-section prompt, then one
             ``label — description`` line per section in SETTINGS_SECTIONS.
     """
-    sections = "\n".join(
-        f"{_(label_key)} — {_(desc_key)}" for label_key, desc_key, _cb in SETTINGS_SECTIONS
+    sections = stack(
+        *(f"{_(label_key)} — {_(desc_key)}" for label_key, desc_key, _cb in SETTINGS_SECTIONS)
     )
-    return _("settings.title") + "\n\n" + _("settings.choose_section") + "\n\n" + sections
+    return blocks(_("settings.title"), _("settings.choose_section"), sections)
 
 
 def _language_text(language: str) -> str:
@@ -66,7 +67,7 @@ def _language_text(language: str) -> str:
             followed by the current language.
     """
     breadcrumb = f"{_('settings.title')} › {_('settings.section_language')}"
-    return breadcrumb + "\n\n" + _("settings.language_current", current=LANGUAGE_NAMES[language])
+    return blocks(breadcrumb, _("settings.language_current", current=LANGUAGE_NAMES[language]))
 
 
 @settings_router.message(MainMenuButton("menu.settings"))

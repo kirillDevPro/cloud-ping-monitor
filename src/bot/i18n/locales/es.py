@@ -31,7 +31,6 @@ MESSAGES: dict[str, str] = {
     'common.back': '◀️ Atrás',
     'common.refresh': '🔄 Actualizar',
     'common.refreshed': '✅ Actualizado',
-    'common.no_data': 'Sin datos',
     'common.invalid_data_format': '❌ Formato de datos no válido',
     'common.server_not_found': '❌ Servidor no encontrado',
     'common.page_change_error': '❌ No se pudo cambiar de página',
@@ -106,9 +105,9 @@ MESSAGES: dict[str, str] = {
     'time.na': 'n/d',
     # stats
     'stats.title': '📊 <b>Estadísticas: {name}</b>',
-    'stats.section_1h': '━━━ <b>Última hora</b> ━━━',
-    'stats.section_24h': '━━━ <b>Últimas 24 horas</b> ━━━',
-    'stats.section_7d': '━━━ <b>Últimos 7 días</b> ━━━',
+    # col (rich table headers)
+    'col.provider': 'Proveedor',
+    'col.period': 'Período',
     # srv
     'srv.manage_title': '🖥️ <b>Gestión de servidores</b>',
     'srv.empty': (

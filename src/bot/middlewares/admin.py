@@ -9,6 +9,7 @@ from aiogram.types import Message, CallbackQuery, TelegramObject
 from aiogram.exceptions import TelegramAPIError
 
 from ..i18n import get_user_language, translate
+from ..utils.rich import answer_rich
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class AdminCheckMiddleware(BaseMiddleware):
                 denied_lang = get_user_language(user.id)
                 try:
                     if isinstance(event, Message):
-                        await event.answer(translate("admin.denied_message", denied_lang))
+                        await answer_rich(event, translate("admin.denied_message", denied_lang))
                     elif isinstance(event, CallbackQuery):
                         await event.answer(
                             translate("admin.denied_short", denied_lang), show_alert=True

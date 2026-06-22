@@ -7,6 +7,7 @@ from aiogram.types import Message
 
 from ..i18n import _
 from ..keyboards.reply import get_main_menu_keyboard
+from ..utils import answer_rich
 
 logger = logging.getLogger(__name__)
 
@@ -28,4 +29,4 @@ async def cmd_start(message: Message) -> None:
     Returns:
         None.
     """
-    await message.answer(_("start.welcome"), reply_markup=get_main_menu_keyboard())
+    await answer_rich(message, _("start.welcome"), get_main_menu_keyboard())

@@ -20,6 +20,7 @@ from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramR
 
 from .formatters.common import esc
 from .i18n import get_user_language, translate, translate_error, translate_plural
+from .utils.rich import send_rich
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,11 @@ Renderer = Callable[[str], str]
 def _escape_str_kwargs(kwargs: dict[str, object]) -> dict[str, object]:
     """HTML-escape string values in a kwargs mapping, passing non-strings through.
 
-    Messages are sent with parse_mode=HTML, so any externally-sourced string
-    (server name, provider label, error text) must be escaped before it is
-    interpolated into a template. Numbers and other non-strings are left as-is so
-    their format specs (e.g. ``{ratio:.0f}``) still apply.
+    Messages are sent as rich HTML (Bot API 10.1), so any externally-sourced
+    string (server name, provider label, error text) must be escaped before it is
+    interpolated into a template — the same escaping rules as the classic HTML
+    parse mode apply. Numbers and other non-strings are left as-is so their format
+    specs (e.g. ``{ratio:.0f}``) still apply.
 
     Args:
         kwargs: Substitution values for a translation template.
@@ -147,7 +149,7 @@ async def _broadcast_to_admins(
         # Render in the recipient's own language.
         message = render(get_user_language(admin_id))
         try:
-            await bot.send_message(admin_id, message)
+            await send_rich(bot, admin_id, message)
             logger.info(f"{label_capitalized} sent to admin {admin_id}")
             delivered = True
         except TelegramRetryAfter as e:
@@ -157,7 +159,7 @@ async def _broadcast_to_admins(
             logger.warning(f"Rate limited for {admin_id}, retry after {e.retry_after}s")
             try:
                 await asyncio.sleep(e.retry_after)
-                await bot.send_message(admin_id, message)
+                await send_rich(bot, admin_id, message)
                 logger.info(f"{label_capitalized} sent to admin {admin_id} after retry")
                 delivered = True
             except Exception as retry_error:

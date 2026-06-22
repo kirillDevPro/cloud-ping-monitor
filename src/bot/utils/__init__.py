@@ -9,6 +9,7 @@ from .error_handler import handle_telegram_errors
 from .callback_data import encode_callback_data, decode_callback_data
 from .server_state import apply_shared_status
 from .screen import reset_screen_from_callback, show_screen
+from .rich import answer_rich, edit_rich, send_rich
 
 __all__ = [
     "safe_edit_message",
@@ -18,4 +19,7 @@ __all__ = [
     "apply_shared_status",
     "show_screen",
     "reset_screen_from_callback",
+    "answer_rich",
+    "edit_rich",
+    "send_rich",
 ]

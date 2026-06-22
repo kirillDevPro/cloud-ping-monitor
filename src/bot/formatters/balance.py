@@ -9,7 +9,8 @@ from ...storage.balance import (
 )
 from ...providers.manager import ProviderManager
 from ..i18n import _, plural
-from .common import format_days_as_period, esc
+from ..utils.rich import blocks, details, stack, table
+from .common import format_days_as_period, esc, plain
 
 
 def collect_provider_balances(
@@ -71,6 +72,26 @@ def collect_provider_balances(
     return provider_balances
 
 
+# On-screen provider markers: the ASCII log emoji ([H]/[V]/[A]) is mapped to a
+# colored circle for the rich UI. The ASCII form is kept for logs/test output
+# (project convention); only the screen presentation is upgraded.
+_UI_PROVIDER_EMOJI: dict[str, str] = {"[H]": "🔴", "[V]": "🔵", "[A]": "🟠"}
+
+
+def _ui_emoji(marker: str) -> str:
+    """Map a provider's ASCII log marker to a colored UI circle.
+
+    Args:
+        marker: The provider's ASCII emoji ("[H]" / "[V]" / "[A]"), or any other
+            value (e.g. a legacy emoji already stored).
+
+    Returns:
+        str: The matching colored circle, or a cloud fallback for an unknown
+            marker.
+    """
+    return _UI_PROVIDER_EMOJI.get(marker, "☁️")
+
+
 def format_balance_main(provider_balances: dict) -> str:
     """
     Format the main balance screen - a summary across all providers.
@@ -86,12 +107,8 @@ def format_balance_main(provider_balances: dict) -> str:
     Returns:
         str: Formatted message in the active language
     """
-    text = _("bal.main_title") + "\n"
-
     if not provider_balances:
-        text += "\n" + _("bal.no_providers") + "\n\n"
-        text += _("bal.add_api_keys")
-        return text
+        return blocks(_("bal.main_title"), _("bal.no_providers"), _("bal.add_api_keys"))
 
     # Group providers by category
     available_balances: list[tuple[str, str, float]] = []  # (emoji, name, balance)
@@ -122,29 +139,44 @@ def format_balance_main(provider_balances: dict) -> str:
             if pending_charges is not None and pending_charges > 0:
                 monthly_expenses.append((emoji, name, pending_charges))
 
-    # Section 1: Available funds
+    sections: list[str] = [_("bal.main_title")]
+
+    # Section 1: Available funds as a table (provider | balance). Table cells are
+    # escaped by the builder, so names are passed raw.
     if available_balances or postpaid_providers:
-        text += "\n" + _("bal.available_funds") + "\n"
-        for emoji, name, balance in available_balances:
-            text += f"{emoji} {esc(name)}: <b>${balance:,.2f}</b>\n"
-        for emoji, name in postpaid_providers:
-            text += f"{emoji} {esc(name)}: — <i>{_('bal.postpaid_suffix')}</i>\n"
+        funds_rows: list[list[object]] = [
+            [f"{_ui_emoji(emoji)} {name}", f"${balance:,.2f}"]
+            for emoji, name, balance in available_balances
+        ]
+        funds_rows += [
+            [f"{_ui_emoji(emoji)} {name}", f"— {_('bal.postpaid_suffix')}"]
+            for emoji, name in postpaid_providers
+        ]
+        sections.append(
+            stack(_("bal.available_funds"), table([_("col.provider"), "💰"], funds_rows))
+        )
 
-    # Section 2: Charges for the current month
+    # Section 2: Charges for the current month as a table.
     if monthly_expenses:
-        text += "\n" + _("bal.monthly_expenses") + "\n"
-        for emoji, name, amount in monthly_expenses:
-            text += f"{emoji} {esc(name)}: ${amount:,.2f}\n"
+        expense_rows: list[list[object]] = [
+            [f"{_ui_emoji(emoji)} {name}", f"${amount:,.2f}"]
+            for emoji, name, amount in monthly_expenses
+        ]
+        sections.append(
+            stack(_("bal.monthly_expenses"), table([_("col.provider"), "📉"], expense_rows))
+        )
 
-    # Section 3: Unavailable providers
+    # Section 3: Unavailable providers (stacked lines — italic suffix needs tags,
+    # so names are escaped explicitly here rather than via a table cell).
     if unavailable:
-        text += "\n" + _("bal.unavailable") + "\n"
-        for emoji, name in unavailable:
-            text += f"{emoji} {esc(name)} <i>{_('bal.no_api_suffix')}</i>\n"
+        unavailable_lines = [
+            f"{_ui_emoji(emoji)} {esc(name)} <i>{_('bal.no_api_suffix')}</i>"
+            for emoji, name in unavailable
+        ]
+        sections.append(stack(_("bal.unavailable"), *unavailable_lines))
 
-    text += "\n" + _("bal.choose_provider")
-
-    return text
+    sections.append(_("bal.choose_provider"))
+    return blocks(*sections)
 
 
 def format_balance_history(
@@ -166,48 +198,43 @@ def format_balance_history(
         str: Formatted message in the active language
     """
     if provider_filter:
-        emoji = provider_emojis.get(provider_filter, "☁️")
-        text = (
-            _(
-                "bal.history_title_provider",
-                emoji=emoji,
-                provider=esc(provider_filter),
-                period=period,
-            )
-            + "\n\n"
+        title = _(
+            "bal.history_title_provider",
+            emoji=_ui_emoji(provider_emojis.get(provider_filter, "")),
+            provider=esc(provider_filter),
+            period=period,
         )
     else:
-        text = _("bal.history_title_all", period=period) + "\n\n"
+        title = _("bal.history_title_all", period=period)
 
     if not records:
-        text += _("bal.history_insufficient") + "\n\n"
-        text += _("bal.history_wait")
-        return text
+        return blocks(title, _("bal.history_insufficient"), _("bal.history_wait"))
 
-    # Group records by date (last 10)
-    # Sort from newest to oldest
+    # Newest first, last 10 records, rendered as a table (date | provider | value).
     sorted_records = sorted(records, key=lambda r: r.timestamp, reverse=True)
-    limited_records = sorted_records[:10]  # Show only the last 10
-
-    for record in limited_records:
+    history_rows: list[list[object]] = []
+    for record in sorted_records[:10]:
         # Use provider_alias if present, otherwise provider_type for legacy
         record_alias = record.provider_alias or record.provider_type
-        emoji = provider_emojis.get(record_alias, "☁️")
-        timestamp_str = record.timestamp.strftime("%Y-%m-%d %H:%M")
+        history_rows.append(
+            [
+                record.timestamp.strftime("%Y-%m-%d %H:%M"),
+                f"{_ui_emoji(provider_emojis.get(record_alias, ''))} {record_alias}",
+                record.format_summary(),
+            ]
+        )
 
-        text += f"<b>{timestamp_str}</b>\n"
-        # Use display_value for a unified display
-        text += f"{emoji} {esc(record_alias)}: {record.format_summary()}\n\n"
+    sections: list[str] = [title, table(["📅", _("col.provider"), "💵"], history_rows)]
 
     if len(sorted_records) > 10:
-        text += plural("bal.history_more", len(sorted_records) - 10) + "\n\n"
+        sections.append(plural("bal.history_more", len(sorted_records) - 10))
 
     if provider_filter:
-        text += _("bal.history_only_provider", provider=esc(provider_filter))
+        sections.append(_("bal.history_only_provider", provider=esc(provider_filter)))
     else:
-        text += _("bal.history_all_providers")
+        sections.append(_("bal.history_all_providers"))
 
-    return text
+    return blocks(*sections)
 
 
 def format_balance_settings(settings: Settings) -> str:
@@ -220,25 +247,27 @@ def format_balance_settings(settings: Settings) -> str:
     Returns:
         str: Formatted message in the active language
     """
-    text = _("bal.settings_title") + "\n\n"
+    # The env-var "how to change" instructions are secondary, so they live in a
+    # collapsible <details> block under the always-visible current values.
+    how_to_body = stack(
+        _("bal.settings_env_line"),
+        f"• <code>BALANCE_THRESHOLD={settings.BALANCE_THRESHOLD}</code>",
+        f"• <code>BALANCE_CHECK_INTERVAL={settings.BALANCE_CHECK_INTERVAL}</code>",
+        _("bal.settings_restart"),
+    )
 
-    # Notification threshold
-    text += _("bal.settings_threshold", value=settings.BALANCE_THRESHOLD) + "\n"
-    text += _("bal.settings_threshold_hint") + "\n\n"
-
-    # Check interval
-    interval_hours = settings.BALANCE_CHECK_INTERVAL / 3600
-    text += _("bal.settings_interval", hours=interval_hours) + "\n"
-    text += _("bal.settings_interval_hint") + "\n\n"
-
-    # Hint
-    text += _("bal.settings_how_to") + "\n"
-    text += _("bal.settings_env_line") + "\n"
-    text += f"   • <code>BALANCE_THRESHOLD={settings.BALANCE_THRESHOLD}</code>\n"
-    text += f"   • <code>BALANCE_CHECK_INTERVAL={settings.BALANCE_CHECK_INTERVAL}</code>\n\n"
-    text += _("bal.settings_restart")
-
-    return text
+    return blocks(
+        _("bal.settings_title"),
+        stack(
+            _("bal.settings_threshold", value=settings.BALANCE_THRESHOLD),
+            _("bal.settings_threshold_hint"),
+        ),
+        stack(
+            _("bal.settings_interval", hours=settings.BALANCE_CHECK_INTERVAL / 3600),
+            _("bal.settings_interval_hint"),
+        ),
+        details(plain(_("bal.settings_how_to")), how_to_body),
+    )
 
 
 # Balance-trend value -> (emoji, catalog key). The dict keys are code-coupled
@@ -285,62 +314,80 @@ def format_balance_provider_detail(
     Returns:
         str: Formatted message in the active language
     """
-    text = f"{provider_emoji} <b>{esc(provider_name)}</b>\n\n"
+    title = f"{_ui_emoji(provider_emoji)} <b>{esc(provider_name)}</b>"
 
     if not supports_balance or record is None:
-        text += _("bal.detail_unavailable") + "\n\n"
-        text += _("bal.detail_no_api_body", provider=esc(provider_name)) + "\n\n"
-        text += _("bal.detail_check_manually")
-        return text
+        return blocks(
+            title,
+            _("bal.detail_unavailable"),
+            _("bal.detail_no_api_body", provider=esc(provider_name)),
+            _("bal.detail_check_manually"),
+        )
 
-    # Use the record's billing_model property instead of checking fields
+    last_check = _(
+        "bal.detail_last_check", timestamp=record.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    )
+
+    # Postpaid provider (AWS): show the month-to-date costs, no burn metrics.
     if record.billing_model == "postpaid":
-        # Postpaid provider (AWS): show the month's costs
-        text += _("bal.detail_postpaid_costs", value=record.display_value) + "\n\n"
-        text += _("bal.detail_postpaid_hint") + "\n\n"
-    else:
-        # Prepaid provider (Vultr): show the balance with a breakdown
-        # Type narrowing: record is PrepaidBalanceRecord
-        if isinstance(record, PrepaidBalanceRecord):
-            text += _("bal.detail_available_balance", value=record.effective_balance) + "\n"
-            text += _("bal.detail_account_balance", value=record.balance) + "\n"
-            text += _("bal.detail_pending", value=record.pending_charges) + "\n\n"
+        return blocks(
+            title,
+            stack(
+                _("bal.detail_postpaid_costs", value=record.display_value),
+                _("bal.detail_postpaid_hint"),
+            ),
+            last_check,
+        )
 
-            # Burn statistics
-            if burn_rate is not None and burn_rate > 0:
-                monthly_rate = burn_rate * 30
-                text += _("bal.detail_burn", value=burn_rate) + "\n"
-                text += _("bal.detail_burn_monthly", value=monthly_rate) + "\n"
+    # Prepaid provider (Vultr/Hetzner): balance breakdown + burn/forecast/trend.
+    sections: list[str] = [title]
+    if isinstance(record, PrepaidBalanceRecord):
+        sections.append(
+            stack(
+                _("bal.detail_available_balance", value=record.effective_balance),
+                _("bal.detail_account_balance", value=record.balance),
+                _("bal.detail_pending", value=record.pending_charges),
+            )
+        )
+
+        # Burn rate, depletion forecast, and trend.
+        analytics: list[str] = []
+        if burn_rate is not None and burn_rate > 0:
+            analytics.append(_("bal.detail_burn", value=burn_rate))
+            analytics.append(_("bal.detail_burn_monthly", value=burn_rate * 30))
+        else:
+            analytics.append(_("bal.detail_burn_insufficient"))
+            analytics.append(_("bal.detail_burn_insufficient_hint"))
+
+        if days_left is not None:
+            if days_left > 0:
+                days_int = int(days_left)
+                analytics.append(plural("bal.forecast_days", days_int))
+                period = format_days_as_period(days_int)
+                if period:
+                    analytics.append(_("bal.detail_forecast_period", period=period))
             else:
-                text += _("bal.detail_burn_insufficient") + "\n"
-                text += _("bal.detail_burn_insufficient_hint") + "\n"
+                analytics.append(_("bal.detail_forecast_depleted"))
+        else:
+            analytics.append(_("bal.detail_forecast_none"))
 
-            if days_left is not None:
-                if days_left > 0:
-                    days_int = int(days_left)
-                    period = format_days_as_period(days_int)
-                    text += plural("bal.forecast_days", days_int) + "\n"
-                    if period:
-                        text += _("bal.detail_forecast_period", period=period) + "\n"
-                else:
-                    text += _("bal.detail_forecast_depleted") + "\n"
-            else:
-                text += _("bal.detail_forecast_none") + "\n"
+        trend_emoji = _TREND_EMOJI.get(trend, "❓")
+        trend_word = _(_TREND_KEYS.get(trend, "trend.unknown"))
+        analytics.append(f"{trend_emoji} " + _("bal.detail_trend_label") + f" {trend_word}")
+        sections.append(stack(*analytics))
 
-            # Trend
-            trend_emoji = _TREND_EMOJI.get(trend, "❓")
-            trend_word = _(_TREND_KEYS.get(trend, "trend.unknown"))
-            text += f"{trend_emoji} " + _("bal.detail_trend_label") + f" {trend_word}\n\n"
+        # Last deposit information (prepaid only).
+        if record.last_payment_date and record.last_payment_amount:
+            sections.append(
+                stack(
+                    _("bal.detail_last_deposit"),
+                    _(
+                        "bal.detail_deposit_date",
+                        date=record.last_payment_date.strftime("%Y-%m-%d %H:%M"),
+                    ),
+                    _("bal.detail_deposit_amount", value=record.last_payment_amount),
+                )
+            )
 
-            # Last deposit information (prepaid only)
-            if record.last_payment_date and record.last_payment_amount:
-                text += _("bal.detail_last_deposit") + "\n"
-                deposit_date = record.last_payment_date.strftime("%Y-%m-%d %H:%M")
-                text += _("bal.detail_deposit_date", date=deposit_date) + "\n"
-                text += _("bal.detail_deposit_amount", value=record.last_payment_amount) + "\n\n"
-
-    # Check time (for all models)
-    last_check = record.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-    text += _("bal.detail_last_check", timestamp=last_check)
-
-    return text
+    sections.append(last_check)
+    return blocks(*sections)

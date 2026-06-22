@@ -4,7 +4,8 @@ from typing import Any
 
 from ...models import Server, ServerStatus, PingStatistics, PingResult
 from ..i18n import _
-from .common import esc
+from ..utils.rich import blocks, stack, table
+from .common import STATS_METRIC_HEADERS, esc, stats_metric_cells, strip_rule
 
 
 def format_provider_selection(servers: list[Server]) -> str:
@@ -25,15 +26,11 @@ def format_provider_selection(servers: list[Server]) -> str:
     offline_count = sum(1 for s in servers if s.status == ServerStatus.OFFLINE)
     unknown_count = len(servers) - online_count - offline_count
 
-    # Build the message
-    text = _("srv.manage_title") + "\n\n"
-
-    # Overall stats (compact format — no translatable words)
-    text += f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}\n\n"
-
-    text += _("srv.choose_provider")
-
-    return text
+    return blocks(
+        _("srv.manage_title"),
+        f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}",
+        _("srv.choose_provider"),
+    )
 
 
 def format_servers_management_list(
@@ -60,18 +57,16 @@ def format_servers_management_list(
     offline_count = sum(1 for s in servers if s.status == ServerStatus.OFFLINE)
     unknown_count = len(servers) - online_count - offline_count
 
-    # Build the header
     if provider_alias:
-        text = _("srv.servers_provider_title", provider=esc(provider_alias.upper())) + "\n\n"
+        title = _("srv.servers_provider_title", provider=esc(provider_alias.upper()))
     else:
-        text = _("srv.manage_title") + "\n\n"
+        title = _("srv.manage_title")
 
-    # Overall stats (compact format — no translatable words)
-    text += f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}\n\n"
-
-    text += _("srv.choose_server")
-
-    return text
+    return blocks(
+        title,
+        f"📊 {len(servers)} • 🟢{online_count} 🔴{offline_count} ❓{unknown_count}",
+        _("srv.choose_server"),
+    )
 
 
 def format_server_control_details(
@@ -109,39 +104,34 @@ def format_server_control_details(
         status_emoji = "❓"
         status_text = _("status.unknown")
 
-    text = f"🖥️ <b>{esc(server.name)}</b>\n\n"
+    # Compact key:value lines for the management card.
+    info_lines = [
+        f"{status_emoji} {status_text} • {esc(server.effective_alias.upper())}",
+    ]
 
-    # Line 1: status and provider
-    text += f"{status_emoji} {status_text} • {esc(server.effective_alias.upper())}\n"
-
-    # Line 2: region and plan
     region_plan = []
     if server.region:
         region_plan.append(f"📍 {esc(server.region)}")
     if server.plan:
         region_plan.append(esc(server.plan))
     if region_plan:
-        text += " • ".join(region_plan) + "\n"
+        info_lines.append(" • ".join(region_plan))
 
-    # Line 3: IP
-    text += f"IP <code>{esc(server.ip)}</code>\n"
+    info_lines.append(f"IP <code>{esc(server.ip)}</code>")
 
-    # Line 4: response time (if present in shared_state)
     if state:
         response_time = state.get("response_time_ms")
         if response_time is not None:
-            text += f"⚡ {response_time:.0f}ms\n"
+            info_lines.append(f"⚡ {response_time:.0f}ms")
 
-    # Resources (compact, if available)
     if server.vcpu_count and server.ram_mb:
         resources = f"{server.vcpu_count}vCPU/{server.ram_mb}MB"
         if server.disk_gb:
             resources += f"/{server.disk_gb}GB"
-        text += f"💾 {resources}\n"
+        info_lines.append(f"💾 {resources}")
 
-    # Information from the provider API (compact)
+    # Power state from the provider API (compact).
     if power_status:
-        # Pick an emoji and label for the status
         if power_status == "running":
             power_emoji = "✅"
             power_text = _("power.on")
@@ -151,22 +141,28 @@ def format_server_control_details(
         else:
             power_emoji = "⏳"
             power_text = esc(power_status.upper())
+        info_lines.append(f"🔌 {power_emoji} {power_text}")
 
-        text += f"\n🔌 {power_emoji} {power_text}\n"
+    sections: list[str] = [f"🖥️ <b>{esc(server.name)}</b>", stack(*info_lines)]
 
-    # Statistics for the last 24 hours (if available)
+    # Statistics for the last 24 hours (if available) as a compact metric table —
+    # the same card the monitoring detail shows, for a consistent look.
     if stats_24h and stats_24h.total_pings > 0:
-        text += "\n" + _("details.stats_24h_header") + "\n\n"
-        text += stats_24h.get_display_text()
+        sections.append(
+            stack(
+                strip_rule(_("details.stats_24h_header")),
+                table(STATS_METRIC_HEADERS, [stats_metric_cells(stats_24h)]),
+            )
+        )
 
-    # Recent errors (compact: at most 3 red markers on a single line)
+    # Recent errors (compact: at most 3 red markers on a single line).
     if recent_errors:
-        shown = min(len(recent_errors), 3)
-        text += "\n" + "🔴 " * shown
+        markers = "🔴 " * min(len(recent_errors), 3)
         if len(recent_errors) > 3:
-            text += f"+{len(recent_errors) - 3}"
+            markers += f"+{len(recent_errors) - 3}"
+        sections.append(markers.strip())
 
-    return text
+    return blocks(*sections)
 
 
 def format_confirmation_message(action: str, server: Server) -> str:
@@ -180,29 +176,33 @@ def format_confirmation_message(action: str, server: Server) -> str:
     Returns:
         Formatted confirmation text in the active language.
     """
-    server_line = f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})\n\n"
+    server_line = f"<b>{esc(server.get_display_name())}</b> ({esc(server.ip)})"
 
     if action == "stop":
-        text = _("srv.confirm_stop_title") + "\n\n"
-        text += _("srv.confirm_stop_q") + "\n"
-        text += server_line
-        text += _("srv.confirm_stop_warn")
-    elif action == "shutdown":
-        text = _("srv.confirm_shutdown_title") + "\n\n"
-        text += _("srv.confirm_shutdown_q") + "\n"
-        text += server_line
-        text += _("srv.confirm_shutdown_warn")
-    elif action == "reboot":
-        text = _("srv.confirm_reboot_title") + "\n\n"
-        text += _("srv.confirm_reboot_q") + "\n"
-        text += server_line
-        text += _("srv.confirm_reboot_warn")
-    else:
-        text = _("srv.confirm_generic_title") + "\n\n"
-        text += _("srv.confirm_generic_server", name=esc(server.get_display_name())) + "\n"
-        text += _("srv.confirm_generic_action", action=esc(action))
-
-    return text
+        return blocks(
+            _("srv.confirm_stop_title"),
+            stack(_("srv.confirm_stop_q"), server_line),
+            _("srv.confirm_stop_warn"),
+        )
+    if action == "shutdown":
+        return blocks(
+            _("srv.confirm_shutdown_title"),
+            stack(_("srv.confirm_shutdown_q"), server_line),
+            _("srv.confirm_shutdown_warn"),
+        )
+    if action == "reboot":
+        return blocks(
+            _("srv.confirm_reboot_title"),
+            stack(_("srv.confirm_reboot_q"), server_line),
+            _("srv.confirm_reboot_warn"),
+        )
+    return blocks(
+        _("srv.confirm_generic_title"),
+        stack(
+            _("srv.confirm_generic_server", name=esc(server.get_display_name())),
+            _("srv.confirm_generic_action", action=esc(action)),
+        ),
+    )
 
 
 # Operation -> catalog keys for the result wording. The "done" word is a past
@@ -241,15 +241,18 @@ def format_operation_result(
     err_word = _(_ACTION_ERR_KEYS.get(action, "action.generic.err"))
 
     if success:
-        text = _("srv.op_success_title") + "\n\n"
-        text += _("srv.op_success_body", name=esc(server_name), action=done_word) + "\n\n"
-        text += _("srv.op_success_hint")
-    else:
-        text = _("srv.op_error_title", action=err_word) + "\n\n"
-        text += _("srv.op_error_body", name=esc(server_name)) + "\n\n"
-        if error:
-            text += _("srv.op_error_details", error=esc(error))
-        else:
-            text += _("srv.op_error_retry")
+        return blocks(
+            _("srv.op_success_title"),
+            _("srv.op_success_body", name=esc(server_name), action=done_word),
+            _("srv.op_success_hint"),
+        )
 
-    return text
+    sections: list[str] = [
+        _("srv.op_error_title", action=err_word),
+        _("srv.op_error_body", name=esc(server_name)),
+    ]
+    if error:
+        sections.append(_("srv.op_error_details", error=esc(error)))
+    else:
+        sections.append(_("srv.op_error_retry"))
+    return blocks(*sections)

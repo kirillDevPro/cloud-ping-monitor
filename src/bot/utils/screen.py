@@ -42,6 +42,8 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
+from .rich import answer_rich
+
 logger = logging.getLogger(__name__)
 
 # Per-chat id of the last bot section-screen message.
@@ -153,7 +155,7 @@ async def show_screen(
 
     Args:
         message: The incoming user message that triggered the screen.
-        text: Screen text (HTML, per the bot's default parse mode).
+        text: Screen rich-HTML body (newlines become <br>; sent as a rich message).
         reply_markup: Optional keyboard for the new screen.
 
     Returns:
@@ -165,7 +167,7 @@ async def show_screen(
     chat_id = message.chat.id
 
     async with _lock_for(chat_id):
-        sent = await message.answer(text, reply_markup=reply_markup)
+        sent = await answer_rich(message, text, reply_markup)
 
         # Commit the new screen to the tracker BEFORE the best-effort delete:
         # the delete can be interrupted (e.g. CancelledError on shutdown) and
@@ -206,7 +208,7 @@ async def reset_screen_from_callback(
 
     Args:
         callback: The callback query whose flow is being reset.
-        text: Screen text (HTML, per the bot's default parse mode).
+        text: Screen rich-HTML body (newlines become <br>; sent as a rich message).
         reply_markup: Optional keyboard for the new (persistent) screen.
 
     Returns:
@@ -223,7 +225,7 @@ async def reset_screen_from_callback(
     chat_id = message.chat.id
 
     async with _lock_for(chat_id):
-        sent = await message.answer(text, reply_markup=reply_markup)
+        sent = await answer_rich(message, text, reply_markup)
 
         # The new screen is a PERSISTENT anchor: it carries the reply keyboard,
         # which Telegram drops if its carrier message is deleted, so it must NOT be
