@@ -1,10 +1,10 @@
-"""Single-screen UI helper for reply-keyboard navigation.
+"""Single-screen UI helpers for reply-keyboard and callback navigation.
 
 Reply-keyboard taps arrive as new user messages, so each section handler would
 otherwise send a brand-new bot message and leave the previous one behind, piling
-up duplicate screens in the chat. This helper keeps at most one live "section
-screen" per chat: it sends the new screen first, then best-effort deletes the
-previously tracked bot screen.
+up duplicate screens in the chat. ``show_screen`` keeps at most one live
+"section screen" per chat: it sends the new screen first, then best-effort
+deletes the previously tracked bot screen.
 
 Intentional scope (decided with the user):
 - The user's own tap messages are left in place (only the bot's previous screen
@@ -15,30 +15,44 @@ Inline-keyboard navigation inside a screen is unaffected: those handlers edit th
 message in place (see ``safe_edit_message``), which preserves the tracked
 ``message_id``, so a later reply-button tap still deletes the right message.
 
+``show_screen_from_callback`` covers callback flows that must replace a tapped
+inline message with a new bot screen, such as re-sending the main-menu reply
+keyboard after a language switch. It deletes both the tracked screen and the
+callback source message so a pre-restart picker is cleaned up even when the
+process-local tracker is empty.
+
 State is bot-process-local (a single aiogram polling process), so a plain dict
 keyed by ``chat_id`` is sufficient. It is not persisted: after a restart the
-tracker is empty, so the first tap cannot delete the pre-restart screen (one
-harmless orphan) and normal single-screen behavior resumes from the next tap.
+tracker is empty, so the first reply-button tap cannot delete the pre-restart
+screen (one harmless orphan) and normal single-screen behavior resumes from the
+next tap. Callback replacement is the exception: the callback source message is
+available directly, so it can be deleted even when the tracker is stale.
 """
 
 import asyncio
 import logging
 
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
+from aiogram.types import (
+    CallbackQuery,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardMarkup,
+)
 
 logger = logging.getLogger(__name__)
 
 # Per-chat id of the last bot section-screen message.
 _last_screen_message: dict[int, int] = {}
 
-# Per-chat lock serializing show_screen so rapid double-taps cannot race on the
-# tracker (which would otherwise leak an undeleted screen).
+# Per-chat lock serializing screen replacement so rapid double-taps cannot race
+# on the tracker (which would otherwise leak an undeleted screen).
 _chat_locks: dict[int, asyncio.Lock] = {}
 
 
 def _lock_for(chat_id: int) -> asyncio.Lock:
-    """Return (creating on first use) the show_screen lock for a chat.
+    """Return, creating on first use, the screen-replacement lock for a chat.
 
     Safe without its own guard: the get-or-create runs synchronously with no
     ``await`` in between, so the single-threaded event loop cannot interleave
@@ -48,7 +62,7 @@ def _lock_for(chat_id: int) -> asyncio.Lock:
         chat_id: Telegram chat id.
 
     Returns:
-        The asyncio.Lock dedicated to this chat.
+        The asyncio.Lock dedicated to this chat's screen lifecycle helpers.
     """
     lock = _chat_locks.get(chat_id)
     if lock is None:
@@ -57,7 +71,7 @@ def _lock_for(chat_id: int) -> asyncio.Lock:
     return lock
 
 
-async def _delete_silently(message: Message, message_id: int) -> None:
+async def _delete_silently(message: Message | InaccessibleMessage, message_id: int) -> bool:
     """Delete a message in the triggering message's chat if possible.
 
     Deletion is best-effort cleanup: the target may already be gone, be older
@@ -72,17 +86,55 @@ async def _delete_silently(message: Message, message_id: int) -> None:
         message_id: Id of the message to delete (in ``message.chat``).
 
     Returns:
-        None. Telegram API deletion failures are logged at debug level and
-        swallowed.
+        True if the message was deleted; False if it was skipped (no bound bot) or
+        the delete failed (logged at debug level and swallowed).
+
+    Raises:
+        No Telegram API exceptions are propagated.
     """
     bot = message.bot
     if bot is None:  # Defensive: bot is always bound on a message inside a handler.
-        return
+        return False
     try:
         await bot.delete_message(chat_id=message.chat.id, message_id=message_id)
+        return True
     except TelegramAPIError as e:
         logger.debug(
             f"Could not delete previous screen {message_id} in chat {message.chat.id}: {e}"
+        )
+        return False
+
+
+async def _neutralize_keyboard(message: Message | InaccessibleMessage, message_id: int) -> None:
+    """Strip a message's inline keyboard so its buttons can no longer fire.
+
+    Fallback for a callback source that could not be deleted (e.g. older than
+    Telegram's 48-hour delete window): editing the reply markup to ``None`` is not
+    time-bounded the way deletion is, so it turns a live orphan picker into an
+    inert text remnant. Best-effort — a failure (the message is also un-editable)
+    is logged at warning level and swallowed.
+
+    Args:
+        message: A message bound to the bot; its chat hosts the target and its
+            ``.bot`` performs the call.
+        message_id: Id of the message whose inline keyboard to remove.
+
+    Returns:
+        None. Telegram API failures are logged at warning level and swallowed.
+
+    Raises:
+        No Telegram API exceptions are propagated.
+    """
+    bot = message.bot
+    if bot is None:
+        return
+    try:
+        await bot.edit_message_reply_markup(
+            chat_id=message.chat.id, message_id=message_id, reply_markup=None
+        )
+    except TelegramAPIError as e:
+        logger.warning(
+            f"Could not neutralize stale picker {message_id} in chat {message.chat.id}: {e}"
         )
 
 
@@ -105,6 +157,9 @@ async def show_screen(
 
     Returns:
         The Message sent by the bot, now recorded as this chat's tracked screen.
+
+    Raises:
+        TelegramAPIError: Propagated if sending the new screen fails.
     """
     chat_id = message.chat.id
 
@@ -120,5 +175,72 @@ async def show_screen(
 
         if previous_id is not None and previous_id != sent.message_id:
             await _delete_silently(message, previous_id)
+
+        return sent
+
+
+async def show_screen_from_callback(
+    callback: CallbackQuery,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | None = None,
+) -> Message | None:
+    """Replace the screen that produced a callback with a brand-new one.
+
+    Like :func:`show_screen`, but for a callback handler that must swap the inline
+    message the user tapped for a freshly sent screen (e.g. re-sending the
+    main-menu reply keyboard after a language change, which cannot be done with an
+    in-place edit). It sends the new screen (this works even for an
+    ``InaccessibleMessage`` source — its ``answer`` shortcut still targets the
+    chat), records it as this chat's tracked screen, and best-effort removes BOTH
+    the previously tracked screen and the callback's own source message.
+
+    Cleaning up the source explicitly — not only the tracked one — matters because
+    the tracker is process-local and empty after a restart: a pre-restart inline
+    message is no longer the tracked id, so it would otherwise linger and stay
+    interactive. If the source cannot be deleted (e.g. older than Telegram's
+    48-hour delete window), its inline keyboard is stripped instead so its buttons
+    can no longer fire.
+
+    Args:
+        callback: The callback query whose message is being replaced.
+        text: Screen text (HTML, per the bot's default parse mode).
+        reply_markup: Optional keyboard for the new screen.
+
+    Returns:
+        The Message sent by the bot (now this chat's tracked screen), or None if
+        the callback carries no message to target.
+
+    Raises:
+        TelegramAPIError: Propagated if sending the replacement screen fails.
+    """
+    message = callback.message
+    if message is None:
+        return None
+
+    chat_id = message.chat.id
+
+    async with _lock_for(chat_id):
+        sent = await message.answer(text, reply_markup=reply_markup)
+
+        # Commit the new screen to the tracker BEFORE the best-effort deletes (the
+        # delete can be interrupted, which would otherwise orphan the new screen).
+        previous_id = _last_screen_message.get(chat_id)
+        _last_screen_message[chat_id] = sent.message_id
+
+        # Delete the previously tracked screen AND the callback's source message.
+        # They coincide in the normal in-place-edit flow but diverge when the
+        # tracker is stale (e.g. after a restart), so both are removed; None and the
+        # just-sent id are skipped, and each id is deleted at most once.
+        seen: set[int] = set()
+        for message_id in (previous_id, message.message_id):
+            if message_id is None or message_id == sent.message_id or message_id in seen:
+                continue
+            seen.add(message_id)
+            deleted = await _delete_silently(message, message_id)
+            # The callback's own source is the interactive picker; if it could not
+            # be deleted (e.g. older than Telegram's 48h delete window), strip its
+            # inline keyboard so its buttons can't keep firing.
+            if not deleted and message_id == message.message_id:
+                await _neutralize_keyboard(message, message_id)
 
         return sent

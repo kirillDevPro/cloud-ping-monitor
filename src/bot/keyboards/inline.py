@@ -1,4 +1,4 @@
-"""Inline keyboards for the Telegram bot."""
+"""Inline keyboard builders for bot screens and callback-driven navigation."""
 
 import math
 
@@ -549,20 +549,44 @@ def get_provider_selection_keyboard(servers: list[Server]) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_language_keyboard(current_language: str) -> InlineKeyboardMarkup:
+def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
+    """Build the settings hub (top-level settings menu) inline keyboard.
+
+    This is the screen the user lands on after tapping the Settings reply button:
+    one button per settings section. Today only the language section exists; a new
+    section is added as one more row here plus its open/back callbacks in the
+    settings router. Tapping a section opens it in place (the message is edited,
+    not replaced), and the section's "Back" button returns to this hub.
+
+    Returns:
+        InlineKeyboardMarkup: One row per settings section.
     """
-    Build the language-picker inline keyboard.
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text=_("settings.section_language"), callback_data="settings_lang"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_language_keyboard(current_language: str) -> InlineKeyboardMarkup:
+    """Build the language-picker inline keyboard for the language section.
 
     One button per supported language; the active language is marked with bullets.
-    Language names are proper nouns (🇬🇧 English / 🇷🇺 Русский) shown identically in
-    every UI language, so they are not translated. The callback encodes the target
-    language code (``set_lang_en`` / ``set_lang_ru``).
+    Language names are proper nouns shown identically in every UI language, so
+    they are not translated. The callback encodes the target language code
+    (``set_lang_en`` / ``set_lang_ru``). A trailing Back row uses
+    ``settings_back`` so the settings router edits the same message back to the
+    hub.
 
     Args:
         current_language: The user's currently active language code.
 
     Returns:
-        InlineKeyboardMarkup: One row per supported language.
+        InlineKeyboardMarkup: One row per supported language, then a Back row.
     """
     keyboard: list[list[InlineKeyboardButton]] = []
     for language in SUPPORTED_LANGUAGES:
@@ -572,5 +596,8 @@ def get_language_keyboard(current_language: str) -> InlineKeyboardMarkup:
         keyboard.append(
             [InlineKeyboardButton(text=label, callback_data=f"set_lang_{language}")]
         )
+
+    # Back returns to the settings hub by editing this picker in place.
+    keyboard.append([InlineKeyboardButton(text=_("common.back"), callback_data="settings_back")])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

@@ -1,4 +1,12 @@
-"""Settings router: the language picker (Settings button and /language command)."""
+"""Settings router for the hub screen and its language section.
+
+The Settings reply button lands on a small inline "hub" menu (one button per
+settings section), and tapping a section edits that hub into the selected
+section. Today the only section is the language picker, but the hub is the
+extension point for future settings: a new section needs one more button in
+``get_settings_menu_keyboard`` plus matching open/back callbacks here. The
+``/language`` command is a shortcut straight to the language section.
+"""
 
 import asyncio
 import logging
@@ -15,51 +23,64 @@ from ..i18n import (
     set_current_language,
     set_user_language,
 )
-from ..keyboards import get_language_keyboard, get_main_menu_keyboard
-from ..utils import handle_telegram_errors, safe_edit_message
+from ..keyboards import (
+    get_language_keyboard,
+    get_main_menu_keyboard,
+    get_settings_menu_keyboard,
+)
+from ..utils import (
+    handle_telegram_errors,
+    safe_edit_message,
+    show_screen,
+    show_screen_from_callback,
+)
 
 logger = logging.getLogger(__name__)
 
-# Create the router for settings / language
+# Router for the settings hub, language section, and language-selection callbacks.
 settings_router = Router(name="settings")
 
 
-def _settings_text(language: str) -> str:
-    """Build the settings screen body for a language.
-
-    Args:
-        language: Language code to render the screen and highlight as current.
+def _menu_text() -> str:
+    """Build the settings hub screen body.
 
     Returns:
-        str: The HTML settings text (title, current language, choose-a-language
-            prompt).
+        str: The HTML hub text (title + the choose-a-section prompt).
     """
-    return (
-        _("settings.title")
-        + "\n\n"
-        + _("settings.language_current", current=LANGUAGE_NAMES[language])
-        + "\n\n"
-        + _("settings.choose_language")
-    )
+    return _("settings.title") + "\n\n" + _("settings.choose_section")
+
+
+def _language_text(language: str) -> str:
+    """Build the language-section screen body for a language.
+
+    Args:
+        language: Language code whose proper name is shown as the current one.
+
+    Returns:
+        str: The HTML language-section text with a settings/language breadcrumb
+            followed by the current language.
+    """
+    breadcrumb = f"{_('settings.title')} › {_('settings.section_language')}"
+    return breadcrumb + "\n\n" + _("settings.language_current", current=LANGUAGE_NAMES[language])
 
 
 @settings_router.message(MainMenuButton("menu.settings"))
-async def cmd_settings(message: Message, language: str) -> None:
-    """Handle the Settings reply-keyboard button: show the language picker.
+async def cmd_settings(message: Message) -> None:
+    """Handle the Settings reply-keyboard button: show the settings hub.
 
     Args:
         message: Incoming reply-keyboard tap message.
-        language: The user's active language (injected by LanguageMiddleware).
 
     Returns:
         None.
     """
-    await message.answer(_settings_text(language), reply_markup=get_language_keyboard(language))
+    # Sent as the single live section screen (deletes this chat's previous one).
+    await show_screen(message, _menu_text(), get_settings_menu_keyboard())
 
 
 @settings_router.message(Command("language"))
 async def cmd_language(message: Message, language: str) -> None:
-    """Handle the /language command: show the language picker.
+    """Handle the /language command: jump straight to the language section.
 
     Args:
         message: Incoming /language command message.
@@ -68,18 +89,52 @@ async def cmd_language(message: Message, language: str) -> None:
     Returns:
         None.
     """
-    await message.answer(_settings_text(language), reply_markup=get_language_keyboard(language))
+    await show_screen(message, _language_text(language), get_language_keyboard(language))
+
+
+@settings_router.callback_query(F.data == "settings_lang")
+@handle_telegram_errors
+async def callback_open_language(callback: CallbackQuery, language: str) -> None:
+    """Open the language section from the settings hub (edits the hub in place).
+
+    Args:
+        callback: Callback query from the hub's language button.
+        language: The user's active language (injected by LanguageMiddleware).
+
+    Returns:
+        None.
+    """
+    await safe_edit_message(callback, _language_text(language), get_language_keyboard(language))
+    await callback.answer()
+
+
+@settings_router.callback_query(F.data == "settings_back")
+@handle_telegram_errors
+async def callback_settings_back(callback: CallbackQuery) -> None:
+    """Return from a settings section to the settings hub (edits in place).
+
+    Args:
+        callback: Callback query from a section's Back button.
+
+    Returns:
+        None.
+    """
+    await safe_edit_message(callback, _menu_text(), get_settings_menu_keyboard())
+    await callback.answer()
 
 
 @settings_router.callback_query(F.data.startswith("set_lang_"))
 @handle_telegram_errors
 async def callback_set_language(callback: CallbackQuery) -> None:
-    """Persist the chosen language and refresh the UI in that language.
+    """Persist the chosen language and send one clean main-menu screen in it.
 
-    Stores the choice, activates it for the rest of this update, edits the
-    settings message in the new language, and re-sends the main-menu reply
-    keyboard (reply keyboards cannot be edited in place, so their labels are only
-    refreshed by sending a new one).
+    Stores the choice, activates it for the rest of this update, then replaces the
+    language picker with a single main-menu screen rendered in the new language.
+    Reply-keyboard labels cannot be edited in place, so a language switch must
+    re-send the main menu; routing that through ``show_screen_from_callback``
+    deletes the picker — even when the single-screen tracker is stale after a
+    restart — and tracks the new menu, leaving the chat with one clean screen
+    instead of a leftover (still interactive) picker plus a separate notice.
 
     Args:
         callback: Callback query whose data is ``set_lang_<code>``.
@@ -112,10 +167,10 @@ async def callback_set_language(callback: CallbackQuery) -> None:
         )
         await callback.answer(_("settings.language_not_saved"), show_alert=True)
 
-    await safe_edit_message(callback, _settings_text(new_language), get_language_keyboard(new_language))
-
-    # Re-send the main menu so its (reply-keyboard) labels switch language too.
-    if callback.message is not None:
-        await callback.message.answer(
-            _("settings.menu_updated"), reply_markup=get_main_menu_keyboard()
-        )
+    # Reply-keyboard labels cannot be edited in place, so a language switch must
+    # re-send the main menu. show_screen_from_callback swaps the picker for a single
+    # clean main-menu screen in the new language and deletes the picker even when
+    # the tracker is stale after a restart (no leftover interactive picker).
+    await show_screen_from_callback(
+        callback, _("settings.menu_updated"), get_main_menu_keyboard()
+    )

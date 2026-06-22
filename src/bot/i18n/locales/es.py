@@ -242,7 +242,8 @@ MESSAGES: dict[str, str] = {
     # settings
     'settings.title': '⚙️ <b>Ajustes</b>',
     'settings.language_current': '🌐 <b>Idioma:</b> {current}',
-    'settings.choose_language': '🌐 Elige un idioma:',
+    'settings.choose_section': 'Elige una sección:',
+    'settings.section_language': '🌐 Idioma',
     'settings.language_changed': '✅ Idioma cambiado a Español',
     'settings.language_not_saved': '⚠️ Idioma cambiado para esta sesión, pero no se pudo guardar (podría restablecerse tras un reinicio).',
     'settings.menu_updated': '🌐 El menú se ha actualizado.',
