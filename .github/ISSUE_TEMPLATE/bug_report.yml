@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a problem with the bot
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Filling in as much as you can makes it
+        far quicker to diagnose. **Redact every secret** (bot token, provider API keys, admin
+        IDs) from logs and screenshots before posting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: providers
+    attributes:
+      label: Affected provider(s)
+      multiple: true
+      options:
+        - Vultr
+        - Hetzner
+        - AWS
+        - Not provider-specific
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / runtime
+      placeholder: "e.g. Ubuntu 24.04, Windows Server 2022, Docker"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.12.4"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant output from `logs/`. Redact tokens, keys, and IDs first.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I removed all secrets (bot token, API keys, admin IDs) from logs and screenshots.
+          required: true
